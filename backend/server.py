@@ -610,6 +610,94 @@ async def reverse_search(q: str):
 
 
 # ============================================================
+# AI Copilot (Gemini)
+# ============================================================
+class CopilotRequest(BaseModel):
+    question: str
+    session_id: Optional[str] = None
+
+
+class CopilotResponse(BaseModel):
+    answer: str
+    session_id: str
+
+
+def _build_workspace_context() -> str:
+    """Compact JSON-ish summary of the workspace for the AI."""
+    lines: List[str] = ["WORKSPACE SNAPSHOT (live)"]
+    lines.append(f"\n## Shipments ({len(SHIPMENTS)})")
+    for s in SHIPMENTS:
+        modes = "+".join(s["modes"])
+        lines.append(
+            f"- {s['id']} [{s.get('audience','shipper')}] ref={s['reference']} "
+            f"status={s['status']} progress={s['progress']}% delay_days={s.get('delay_days',0)} "
+            f"eta={s['eta']} {s['origin']}->{s['destination']} ({modes}) "
+            f"consignor={s['consignor']} consignee={s['consignee']}"
+        )
+        for leg in s.get("legs", []):
+            lines.append(
+                f"    leg {leg['sequence']} {leg['mode']} {leg['carrier']} {leg['vehicle_ref']} "
+                f"{leg['from_code']}->{leg['to_code']} {leg['departure']} -> {leg['arrival']} "
+                f"status={leg['status']}"
+                + (f" BL={leg['bl_number']}" if leg.get('bl_number') else "")
+                + (f" AWB={leg['awb_number']}" if leg.get('awb_number') else "")
+            )
+        if s.get("linked_orders"):
+            for o in s["linked_orders"]:
+                lines.append(f"    linked-order {o['order_number']} {o['customer_name']} {o['city']} {o['product']}")
+    lines.append(f"\n## Order Documents ({len(ORDER_DOCS)})")
+    for d in ORDER_DOCS:
+        lines.append(
+            f"- {d['doc_type']} {d['doc_number']} party={d['party']} shipment={d['shipment_id']} "
+            f"value=${d['value_usd']} date={d['order_date']} source={d['source']}"
+        )
+    lines.append(f"\n## ERP Integrations ({len(INTEGRATIONS)})")
+    for it in INTEGRATIONS:
+        lines.append(f"- {it['id']} {it['provider']} {it['name']} status={it['status']} "
+                     f"records={it['record_count']} last_sync={it.get('last_sync')}")
+    return "\n".join(lines)
+
+
+SYSTEM_PROMPT = (
+    "You are UniRoute Copilot, an analytical assistant embedded inside a multimodal logistics "
+    "tracking dashboard. The user is a logistics operator. Use ONLY the workspace snapshot below "
+    "to answer their questions. Be concise: prefer short paragraphs and bullet lists with shipment "
+    "IDs, dates and concrete numbers. If the snapshot does not contain enough info to answer, say "
+    "so plainly — do not invent shipments, B/Ls, AWBs, carriers or dates. Never use markdown tables; "
+    "use simple bullets or short prose. Always reference shipment IDs in monospace style.\n\n"
+    "{context}"
+)
+
+
+@api_router.post("/copilot/ask", response_model=CopilotResponse)
+async def copilot_ask(body: CopilotRequest):
+    q = (body.question or "").strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Question must not be empty")
+
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY not configured")
+
+    session_id = body.session_id or f"copilot-{uuid.uuid4().hex[:8]}"
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = (
+            LlmChat(
+                api_key=api_key,
+                session_id=session_id,
+                system_message=SYSTEM_PROMPT.format(context=_build_workspace_context()),
+            )
+            .with_model("gemini", "gemini-3-flash-preview")
+        )
+        reply = await chat.send_message(UserMessage(text=q))
+        return {"answer": str(reply), "session_id": session_id}
+    except Exception as e:
+        logger.exception("Copilot error")
+        raise HTTPException(status_code=500, detail=f"Copilot failed: {e}")
+
+
+# ============================================================
 # ERP Integrations + Order Docs (PO/SO)
 # ============================================================
 class ERPIntegration(BaseModel):
