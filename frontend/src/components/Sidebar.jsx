@@ -1,26 +1,36 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Activity, PackageCheck, Hourglass, Truck,
-  Star, AlertCircle, Trash2, Settings, Globe2, FileSearch, Plug, Receipt,
+  LayoutDashboard, Activity, Hourglass, Star, Trash2, Settings,
+  Globe2, FileSearch, Plug, Receipt,
 } from "lucide-react";
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", testid: "nav-dashboard" },
-  { label: "All Shipments", icon: Globe2, href: "/#workspace", testid: "nav-all", badge: "4" },
-  { label: "Reverse Search", icon: FileSearch, href: "/reverse-search", testid: "nav-reverse-search" },
-  { label: "Integrations", icon: Plug, href: "/integrations", testid: "nav-integrations" },
-  { label: "Orders & POs", icon: Receipt, href: "/orders-pos", testid: "nav-orders-pos" },
-  { label: "In Transit", icon: Truck, href: "/?status=active#workspace", testid: "nav-transit", badge: "2" },
-  { label: "Completed", icon: PackageCheck, href: "/?status=completed#workspace", testid: "nav-completed", badge: "1" },
-  { label: "Delayed", icon: AlertCircle, href: "/?status=delayed#workspace", testid: "nav-delayed", badge: "1" },
-  { label: "Yet to Start", icon: Hourglass, href: "/?status=scheduled#workspace", testid: "nav-scheduled" },
-  { label: "Starred", icon: Star, href: "/#workspace", testid: "nav-starred" },
-  { label: "Deleted", icon: Trash2, href: "/#workspace", testid: "nav-deleted" },
-];
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Sidebar() {
   const loc = useLocation();
+  const [shipperCount, setShipperCount] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios.get(`${API}/shipments`, { params: { audience: "shipper" } })
+      .then((r) => { if (!cancelled) setShipperCount((r.data || []).length); })
+      .catch(() => { if (!cancelled) setShipperCount(0); });
+    return () => { cancelled = true; };
+  }, [loc.pathname]);
+
+  const navItems = [
+    { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", testid: "nav-dashboard" },
+    { label: "All Shipments", icon: Globe2, href: "/#workspace", testid: "nav-all", badge: shipperCount },
+    { label: "Reverse Search", icon: FileSearch, href: "/reverse-search", testid: "nav-reverse-search" },
+    { label: "Integrations", icon: Plug, href: "/integrations", testid: "nav-integrations" },
+    { label: "Orders & POs", icon: Receipt, href: "/orders-pos", testid: "nav-orders-pos" },
+    { label: "Yet to Start", icon: Hourglass, href: "/?status=scheduled#workspace", testid: "nav-scheduled" },
+    { label: "Starred", icon: Star, href: "/#workspace", testid: "nav-starred" },
+    { label: "Deleted", icon: Trash2, href: "/#workspace", testid: "nav-deleted" },
+  ];
+
   return (
     <aside
       data-testid="sidebar-nav"
@@ -41,6 +51,7 @@ export default function Sidebar() {
         {navItems.map((it) => {
           const Icon = it.icon;
           const active = loc.search.includes(it.href.split("?")[1] || "##");
+          const showBadge = it.badge !== undefined && it.badge !== null;
           return (
             <Link
               key={it.label}
@@ -54,7 +65,7 @@ export default function Sidebar() {
                 <Icon className="w-4 h-4" strokeWidth={2} />
                 <span className="font-medium">{it.label}</span>
               </span>
-              {it.badge && (
+              {showBadge && (
                 <span className={`text-[10px] font-mono px-1.5 py-0.5 ${
                   active ? "bg-white/15 text-white" : "bg-neutral-200 text-neutral-700"
                 }`}>{it.badge}</span>
