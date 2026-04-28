@@ -119,7 +119,7 @@ export default function Dashboard() {
         </section>
 
         {/* Body grid: Filter rail + Table */}
-        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] gap-6 items-start">
           <div className="flex flex-col gap-4">
             <FilterPresets
               presets={presets}
