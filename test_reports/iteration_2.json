@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 2 testing of UniRoute logistics tracker (shipper vs customer views + TechNova consolidated case). Backend: 11/11 pytest passed. Verified audience filter (shipper=5, customer=2), SHP-2025-5500 returns 3 legs road->ocean(Houston->Mundra)->road with 2 linked_orders (Rahul/Bengaluru, Priya/Jaipur). /api/orders/ORD-IN-7821 returns 5 legs (road, ocean, road, air DEL->BLR, road BLR-HUB->BLR-HOME) with UltraBook 14 Pro & Rahul Sharma. ORD-IN-7822 returns 4 legs (no air, last road to Jaipur) with Priya Mehta. /api/orders/SHP-2025-1042 and /api/orders/INVALID both return 404 as expected. Frontend: Landing default = shipper view, ViewToggle visible (data-testid=view-toggle, view-toggle-shipper, view-toggle-customer). Customer toggle switches headline to 'Where is my package?', placeholder ENTER ORDER NUMBER, chips show ORD-IN-7821/7822, URL gets ?view=customer, shipment-list-grid is hidden, customer-help-section shown. Clicking SHP-2025-5500 chip in shipper view reveals MultimodalTimeline + linked-orders-panel with linked-order-ORD-IN-7821 and linked-order-ORD-IN-7822 cards. Clicking linked-order-ORD-IN-7821 navigates to /order/ORD-IN-7821 -> customer-order-page renders customer-timeline with 5 customer-step entries, product UltraBook 14 Pro, name Rahul. Customer-view example chip ORD-IN-7822 renders 4 customer-step entries with UltraBook 13 Air & Priya. Invalid order in customer view shows 'Order INVALID-ORD-999 not found' toast. Toggle back to shipper restores shipment-list-grid; filter-active works (3 active including SHP-2025-5500). /shipment/SHP-2025-5500 detail page renders linked-orders-panel.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Landing top bar", "issues": ["Sonner toast appears top-right and visually overlaps the ViewToggle (also top-right). When a toast is in flight, the shipper/customer toggle buttons can be obstructed for ~3-4 seconds. Consider repositioning toaster to top-center or bottom-right, or moving ViewToggle further from the toast region."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_shipments.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL UX: Move <Toaster/> position from top-right to bottom-right (or top-center) so error toasts do not visually overlap the ViewToggle.",
+    "OPTIONAL: ShipmentCard still uses non-unique data-testid='shipment-card'. Consider per-id testid such as 'shipment-card-{id}' for robust E2E targeting."
+  ],
+  "critical_code_review_comments": [
+    "server.py is concise (~560 lines incl. mock data). Endpoint /api/orders/{order_number} correctly restricts results to audience='customer', preventing leakage of shipper-side shipments via the customer route (verified via 404 for SHP-2025-1042).",
+    "/api/shipments without audience returns ALL 7 entries (4 legacy shipper + 1 consolidated + 2 customer). Frontend always passes audience=shipper for the list, but the unfiltered default could surprise other consumers. Consider defaulting to audience='shipper' on the server when audience is not provided, OR documenting current behavior.",
+    "Pydantic Literal on JourneyLeg.mode currently allows only road/ocean/air which matches all current data; if future legs need 'rail' or 'last-mile', extend the Literal.",
+    "MongoDB client is initialized but unused (mock data only). Idle connection — fine for MVP, lazy init would be cleaner.",
+    "Audience query param is loosely validated (only 'shipper'/'customer' accepted; other values silently ignored). Consider 422 on invalid value or use Literal type.",
+    "linked_order_status uses a custom Literal but the SHP-2025-5500 mock data uses 'active' which is allowed. Consistent with parent shipment status."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_shipments.py (rewritten for iteration 2: 11 tests covering audience filter, SHP-2025-5500 consolidated, /api/orders endpoint, 404 for shipper id via orders endpoint)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all 15 review checks)"},
+  "test_credentials": "N/A (no auth)",
+  "seed_data_creation": "None - mock data hardcoded in backend SHIPMENTS list",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 11 backend pytests in /app/backend/tests/test_shipments.py pass when run with REACT_APP_BACKEND_URL env var (read from /app/frontend/.env if missing). Mock data: 4 legacy shipper shipments + SHP-2025-5500 consolidated (3 legs road/ocean/road, 2 linked_orders) + ORD-IN-7821 (5 legs incl. domestic air DEL->BLR + last-mile BLR-HOME) + ORD-IN-7822 (4 legs, surface road to Jaipur). Frontend uses ViewToggle (shipper default, ?view=customer in URL when customer). data-testids present: view-toggle, view-toggle-{shipper|customer}, customer-timeline, customer-step, linked-orders-panel, linked-order-{order_number}, customer-order-page, customer-help-section, open-detail-button, example-{ID}, search-shipment-input, track-shipment-button, filter-{all|active|completed|delayed}, shipment-list-grid, tracked-result-section. Routes: /, /shipment/:id, /order/:orderNo. ShipmentCard testid is non-unique (shared across all cards).",
+  "rca of the issue": "No bugs found. Initial automation flake observed on view-toggle-shipper click during a brief test window where the Sonner toast overlapped the toggle (top-right). Re-run with proper toast-dismissal wait succeeded — functionality is correct; this is a UX polish item (Toaster position), not a defect."
+}

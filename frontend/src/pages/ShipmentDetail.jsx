@@ -4,6 +4,7 @@ import axios from "axios";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import MultimodalTimeline from "../components/MultimodalTimeline";
 import StatusBadge from "../components/StatusBadge";
+import LinkedOrdersPanel from "../components/LinkedOrdersPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -54,6 +55,7 @@ export default function ShipmentDetail() {
               <StatusBadge status={shipment.status} />
             </div>
             <MultimodalTimeline shipment={shipment} />
+            {shipment.linked_orders && <LinkedOrdersPanel orders={shipment.linked_orders} />}
           </>
         )}
       </div>

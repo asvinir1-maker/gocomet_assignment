@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import Sidebar from "./components/Sidebar";
 import Landing from "./pages/Landing";
 import ShipmentDetail from "./pages/ShipmentDetail";
+import CustomerOrderDetail from "./pages/CustomerOrderDetail";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/shipment/:id" element={<ShipmentDetail />} />
+            <Route path="/order/:orderNo" element={<CustomerOrderDetail />} />
           </Routes>
         </main>
         <Toaster position="top-right" />

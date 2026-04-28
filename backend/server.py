@@ -37,6 +37,14 @@ class JourneyLeg(BaseModel):
     notes: Optional[str] = None
 
 
+class LinkedOrder(BaseModel):
+    order_number: str
+    customer_name: str
+    city: str
+    product: str
+    status: Literal["active", "completed", "delayed", "scheduled"]
+
+
 class Shipment(BaseModel):
     id: str
     reference: str
@@ -54,6 +62,14 @@ class Shipment(BaseModel):
     container_count: int
     booking_date: str
     legs: List[JourneyLeg]
+    # Optional metadata for customer-facing or consolidated shipments
+    audience: Literal["shipper", "customer"] = "shipper"
+    customer_name: Optional[str] = None
+    customer_city: Optional[str] = None
+    product: Optional[str] = None
+    order_number: Optional[str] = None
+    parent_shipment_id: Optional[str] = None
+    linked_orders: Optional[List[LinkedOrder]] = None
 
 
 # ---------- Mock Data ----------
@@ -261,6 +277,225 @@ SHIPMENTS: List[dict] = [
             },
         ],
     },
+    # ----------- TechNova Laptop case: shipper consolidated + 2 customer orders -----------
+    {
+        "id": "SHP-2025-5500",
+        "reference": "PO-TN-IN-CONS-001",
+        "consignor": "TechNova Computing Inc., Austin TX",
+        "consignee": "TechNova India Distribution Hub, Gurugram",
+        "origin": "Austin, USA",
+        "destination": "Gurugram, India",
+        "origin_country": "US",
+        "destination_country": "IN",
+        "status": "active",
+        "eta": "2026-01-18",
+        "progress": 38,
+        "modes": ["road", "ocean", "road"],
+        "weight_kg": 14250.0,
+        "container_count": 1,
+        "booking_date": "2025-11-12",
+        "audience": "shipper",
+        "linked_orders": [
+            {
+                "order_number": "ORD-IN-7821",
+                "customer_name": "Rahul Sharma",
+                "city": "Bengaluru",
+                "product": "TechNova UltraBook 14 Pro",
+                "status": "active",
+            },
+            {
+                "order_number": "ORD-IN-7822",
+                "customer_name": "Priya Mehta",
+                "city": "Jaipur",
+                "product": "TechNova UltraBook 13 Air",
+                "status": "active",
+            },
+        ],
+        "legs": [
+            {
+                "leg_id": "L1", "sequence": 1, "mode": "road",
+                "carrier": "JB Hunt Transport",
+                "vehicle_ref": "TRK-TX-AU3142",
+                "from_location": "TechNova Warehouse, Austin", "from_code": "AUS-WH",
+                "to_location": "Port of Houston", "to_code": "USHOU",
+                "departure": "2025-11-14T06:00:00Z",
+                "arrival": "2025-11-14T13:30:00Z",
+                "status": "completed",
+                "notes": "Container TCNU-7821044 picked up at warehouse.",
+            },
+            {
+                "leg_id": "L2", "sequence": 2, "mode": "ocean",
+                "carrier": "Maersk Line",
+                "vehicle_ref": "MV MAERSK HOUSTON / V.547W",
+                "from_location": "Port of Houston", "from_code": "USHOU",
+                "to_location": "Mundra Port, Gujarat", "to_code": "INMUN",
+                "departure": "2025-11-18T22:00:00Z",
+                "arrival": "2026-01-04T07:00:00Z",
+                "status": "in_transit",
+                "notes": "Vessel transiting Cape of Good Hope; ETA Mundra unchanged.",
+            },
+            {
+                "leg_id": "L3", "sequence": 3, "mode": "road",
+                "carrier": "TCI Freight (Customs + Drayage)",
+                "vehicle_ref": "TRK-GJ-09-MN8821",
+                "from_location": "Mundra Port (Customs)", "from_code": "INMUN",
+                "to_location": "TechNova India Hub, Gurugram", "to_code": "GUR-DC",
+                "departure": "2026-01-08T09:00:00Z",
+                "arrival": "2026-01-18T18:00:00Z",
+                "status": "scheduled",
+                "notes": "Customs clearance + 1,150 km haul to Gurugram DC.",
+            },
+        ],
+    },
+    {
+        "id": "ORD-IN-7821",
+        "reference": "TN-ORDER-7821",
+        "consignor": "TechNova Computing Inc.",
+        "consignee": "Rahul Sharma",
+        "origin": "Austin, USA",
+        "destination": "Bengaluru, India",
+        "origin_country": "US",
+        "destination_country": "IN",
+        "status": "active",
+        "eta": "2026-01-22",
+        "progress": 35,
+        "modes": ["road", "ocean", "road", "air", "road"],
+        "weight_kg": 2.1,
+        "container_count": 0,
+        "booking_date": "2025-11-10",
+        "audience": "customer",
+        "customer_name": "Rahul Sharma",
+        "customer_city": "Bengaluru",
+        "product": "TechNova UltraBook 14 Pro (Space Grey, 16GB / 1TB)",
+        "order_number": "ORD-IN-7821",
+        "parent_shipment_id": "SHP-2025-5500",
+        "legs": [
+            {
+                "leg_id": "L1", "sequence": 1, "mode": "road",
+                "carrier": "JB Hunt Transport",
+                "vehicle_ref": "TRK-TX-AU3142",
+                "from_location": "TechNova Warehouse, Austin", "from_code": "AUS-WH",
+                "to_location": "Port of Houston", "to_code": "USHOU",
+                "departure": "2025-11-14T06:00:00Z",
+                "arrival": "2025-11-14T13:30:00Z",
+                "status": "completed",
+                "notes": "Shipped from factory.",
+            },
+            {
+                "leg_id": "L2", "sequence": 2, "mode": "ocean",
+                "carrier": "Maersk Line",
+                "vehicle_ref": "MV MAERSK HOUSTON / V.547W",
+                "from_location": "Port of Houston", "from_code": "USHOU",
+                "to_location": "Mundra Port, India", "to_code": "INMUN",
+                "departure": "2025-11-18T22:00:00Z",
+                "arrival": "2026-01-04T07:00:00Z",
+                "status": "in_transit",
+                "notes": "On the high seas — international transit.",
+            },
+            {
+                "leg_id": "L3", "sequence": 3, "mode": "road",
+                "carrier": "TCI Freight",
+                "vehicle_ref": "TRK-GJ-09-MN8821",
+                "from_location": "Mundra Port", "from_code": "INMUN",
+                "to_location": "TechNova India Hub, Gurugram", "to_code": "GUR-DC",
+                "departure": "2026-01-08T09:00:00Z",
+                "arrival": "2026-01-18T18:00:00Z",
+                "status": "scheduled",
+                "notes": "Customs clearance + transfer to India hub.",
+            },
+            {
+                "leg_id": "L4", "sequence": 4, "mode": "air",
+                "carrier": "IndiGo CarGo",
+                "vehicle_ref": "6E-7411 (A321F)",
+                "from_location": "Delhi (DEL)", "from_code": "DEL",
+                "to_location": "Bengaluru (BLR)", "to_code": "BLR",
+                "departure": "2026-01-20T06:30:00Z",
+                "arrival": "2026-01-20T09:15:00Z",
+                "status": "scheduled",
+                "notes": "Domestic air to your city.",
+            },
+            {
+                "leg_id": "L5", "sequence": 5, "mode": "road",
+                "carrier": "Delhivery Express",
+                "vehicle_ref": "VAN-KA-01-DE9117",
+                "from_location": "Bengaluru BLR Hub", "from_code": "BLR-HUB",
+                "to_location": "Indiranagar, Bengaluru", "to_code": "BLR-HOME",
+                "departure": "2026-01-22T08:00:00Z",
+                "arrival": "2026-01-22T15:00:00Z",
+                "status": "scheduled",
+                "notes": "Out for delivery.",
+            },
+        ],
+    },
+    {
+        "id": "ORD-IN-7822",
+        "reference": "TN-ORDER-7822",
+        "consignor": "TechNova Computing Inc.",
+        "consignee": "Priya Mehta",
+        "origin": "Austin, USA",
+        "destination": "Jaipur, India",
+        "origin_country": "US",
+        "destination_country": "IN",
+        "status": "active",
+        "eta": "2026-01-21",
+        "progress": 35,
+        "modes": ["road", "ocean", "road", "road"],
+        "weight_kg": 1.8,
+        "container_count": 0,
+        "booking_date": "2025-11-10",
+        "audience": "customer",
+        "customer_name": "Priya Mehta",
+        "customer_city": "Jaipur",
+        "product": "TechNova UltraBook 13 Air (Silver, 16GB / 512GB)",
+        "order_number": "ORD-IN-7822",
+        "parent_shipment_id": "SHP-2025-5500",
+        "legs": [
+            {
+                "leg_id": "L1", "sequence": 1, "mode": "road",
+                "carrier": "JB Hunt Transport",
+                "vehicle_ref": "TRK-TX-AU3142",
+                "from_location": "TechNova Warehouse, Austin", "from_code": "AUS-WH",
+                "to_location": "Port of Houston", "to_code": "USHOU",
+                "departure": "2025-11-14T06:00:00Z",
+                "arrival": "2025-11-14T13:30:00Z",
+                "status": "completed",
+                "notes": "Shipped from factory.",
+            },
+            {
+                "leg_id": "L2", "sequence": 2, "mode": "ocean",
+                "carrier": "Maersk Line",
+                "vehicle_ref": "MV MAERSK HOUSTON / V.547W",
+                "from_location": "Port of Houston", "from_code": "USHOU",
+                "to_location": "Mundra Port, India", "to_code": "INMUN",
+                "departure": "2025-11-18T22:00:00Z",
+                "arrival": "2026-01-04T07:00:00Z",
+                "status": "in_transit",
+                "notes": "On the high seas — international transit.",
+            },
+            {
+                "leg_id": "L3", "sequence": 3, "mode": "road",
+                "carrier": "TCI Freight",
+                "vehicle_ref": "TRK-GJ-09-MN8821",
+                "from_location": "Mundra Port", "from_code": "INMUN",
+                "to_location": "TechNova India Hub, Gurugram", "to_code": "GUR-DC",
+                "departure": "2026-01-08T09:00:00Z",
+                "arrival": "2026-01-18T18:00:00Z",
+                "status": "scheduled",
+                "notes": "Customs clearance + transfer to India hub.",
+            },
+            {
+                "leg_id": "L4", "sequence": 4, "mode": "road",
+                "carrier": "BlueDart Surface Express",
+                "vehicle_ref": "VAN-RJ-14-BD2204",
+                "from_location": "Gurugram Hub", "from_code": "GUR-DC",
+                "to_location": "C-Scheme, Jaipur", "to_code": "JAI-HOME",
+                "departure": "2026-01-20T07:00:00Z",
+                "arrival": "2026-01-21T16:00:00Z",
+                "status": "scheduled",
+                "notes": "Out for delivery (270 km surface route).",
+            },
+        ],
+    },
 ]
 
 
@@ -271,8 +506,10 @@ async def root():
 
 
 @api_router.get("/shipments", response_model=List[Shipment])
-async def list_shipments(status: Optional[str] = None):
+async def list_shipments(status: Optional[str] = None, audience: Optional[str] = None):
     items = SHIPMENTS
+    if audience and audience in ("shipper", "customer"):
+        items = [s for s in items if s.get("audience", "shipper") == audience]
     if status and status != "all":
         items = [s for s in items if s["status"] == status]
     return items
@@ -285,6 +522,20 @@ async def get_shipment(shipment_id: str):
         if s["id"].upper() == sid or s["reference"].upper() == sid:
             return s
     raise HTTPException(status_code=404, detail=f"Shipment '{shipment_id}' not found")
+
+
+@api_router.get("/orders/{order_number}", response_model=Shipment)
+async def get_order(order_number: str):
+    """Customer-facing order lookup. Accepts order_number or shipment id."""
+    oid = order_number.strip().upper()
+    for s in SHIPMENTS:
+        if s.get("audience") != "customer":
+            continue
+        if (s["id"].upper() == oid
+                or (s.get("order_number") or "").upper() == oid
+                or s["reference"].upper() == oid):
+            return s
+    raise HTTPException(status_code=404, detail=f"Order '{order_number}' not found")
 
 
 app.include_router(api_router)
