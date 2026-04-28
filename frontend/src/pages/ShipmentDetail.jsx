@@ -57,7 +57,17 @@ export default function ShipmentDetail() {
                 </h1>
                 <div className="font-mono text-sm text-neutral-500 mt-2">REF: {shipment.reference} · {shipment.consignor} → {shipment.consignee}</div>
               </div>
-              <StatusBadge status={shipment.status} />
+              <div className="flex items-center gap-3">
+                {shipment.delay_days > 0 && (
+                  <span
+                    data-testid="delay-chip"
+                    className="font-mono text-xs tracking-wider uppercase font-bold px-3 py-1.5 bg-red-600 text-white"
+                  >
+                    Delayed +{shipment.delay_days}d
+                  </span>
+                )}
+                <StatusBadge status={shipment.status} />
+              </div>
             </div>
             <MultimodalTimeline shipment={shipment} />
             {shipment.linked_orders && <LinkedOrdersPanel orders={shipment.linked_orders} />}

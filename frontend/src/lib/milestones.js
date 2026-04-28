@@ -42,6 +42,33 @@ const MODE_MAP = {
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
+export const daysBetween = (a, b) => {
+  if (!a || !b) return 0;
+  const ms = new Date(b).getTime() - new Date(a).getTime();
+  return Math.max(0, Math.round((ms / DAY) * 10) / 10); // 1 decimal
+};
+
+export const daysBetweenInt = (a, b) => Math.round(daysBetween(a, b));
+
+export const getJourneyStart = (legs) => {
+  if (!legs || !legs.length) return null;
+  return legs[0].departure;
+};
+
+export const getJourneyEnd = (legs) => {
+  if (!legs || !legs.length) return null;
+  return legs[legs.length - 1].arrival;
+};
+
+export const getJourneyDurationDays = (legs) => {
+  const s = getJourneyStart(legs);
+  const e = getJourneyEnd(legs);
+  if (!s || !e) return 0;
+  return daysBetweenInt(s, e);
+};
+
+export const getLegDurationDays = (leg) => daysBetween(leg.departure, leg.arrival);
+
 /**
  * Generate milestones for a leg with planned/actual dates and per-milestone
  * status derived from the parent leg's overall status.
