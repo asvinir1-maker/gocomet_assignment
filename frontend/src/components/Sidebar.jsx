@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Activity, Star, Trash2, Settings,
+  LayoutDashboard, Activity, Settings,
   Globe2, FileSearch, Plug, Receipt,
 } from "lucide-react";
 
@@ -26,8 +26,6 @@ export default function Sidebar() {
     { label: "Reverse Search", icon: FileSearch, href: "/reverse-search", testid: "nav-reverse-search" },
     { label: "Integrations", icon: Plug, href: "/integrations", testid: "nav-integrations" },
     { label: "Orders & POs", icon: Receipt, href: "/orders-pos", testid: "nav-orders-pos" },
-    { label: "Starred", icon: Star, href: "/#workspace", testid: "nav-starred" },
-    { label: "Deleted", icon: Trash2, href: "/#workspace", testid: "nav-deleted" },
   ];
 
   return (
