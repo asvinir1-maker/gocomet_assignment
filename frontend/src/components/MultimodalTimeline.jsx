@@ -2,6 +2,7 @@ import React from "react";
 import { MapPin, Clock, Building2, ChevronRight } from "lucide-react";
 import ModeIcon, { modeMeta } from "./ModeIcon";
 import StatusBadge from "./StatusBadge";
+import LegMilestones from "./LegMilestones";
 import { fmtDateTime, flagEmoji } from "../lib/format";
 
 const stepStatusColor = (status) => {
@@ -82,6 +83,8 @@ export default function MultimodalTimeline({ shipment }) {
                       </span>
                     )}
                   </div>
+
+                  <LegMilestones leg={leg} defaultOpen={active} />
                 </div>
                 {!isLast && (
                   <div className="hidden md:flex items-center justify-center w-8 -mx-4 z-10 bg-white">
