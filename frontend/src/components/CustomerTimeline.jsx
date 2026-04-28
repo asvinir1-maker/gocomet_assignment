@@ -13,8 +13,15 @@ const milestoneFor = (leg, idx, total) => {
   if (isFirstRoad) return { title: "Shipped from Factory", Icon: Warehouse };
   if (leg.mode === "ocean") return { title: "International Sea Transit", Icon: Ship };
   if (leg.mode === "air") return { title: "Domestic Flight to Your City", Icon: Plane };
-  if (leg.mode === "road" && idx === 2) return { title: "Arrived in India · Customs", Icon: Globe2 };
   if (isLastRoad) return { title: "Out for Delivery", Icon: Truck };
+  // Middle road leg (after ocean) — distinguish customs/short-haul vs long-haul to your city
+  if (leg.mode === "road" && idx >= 2) {
+    const code = (leg.to_code || "").toUpperCase();
+    if (code.includes("HUB") || code.endsWith("-DC") || code.includes("WH")) {
+      return { title: "Domestic Road Transit", Icon: Truck };
+    }
+    return { title: "Arrived in India · Customs", Icon: Globe2 };
+  }
   return { title: "In Transit", Icon: Truck };
 };
 
