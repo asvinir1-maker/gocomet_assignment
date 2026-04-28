@@ -18,7 +18,7 @@ function App() {
             <Route path="/order/:orderNo" element={<CustomerOrderDetail />} />
           </Routes>
         </main>
-        <Toaster position="top-right" />
+        <Toaster position="bottom-right" />
       </BrowserRouter>
     </div>
   );
