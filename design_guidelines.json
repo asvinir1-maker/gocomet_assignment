@@ -1,0 +1,115 @@
+{
+  "theme": "Light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "design_philosophy": "Functional authority. No decorative gradients. Information is king. Use sharp 1px borders, rigid grids, and high-contrast typography to create a precise, commanding logistics environment.",
+  "typography": {
+    "fonts": {
+      "heading": "'Cabinet Grotesk', sans-serif",
+      "body": "'IBM Plex Sans', sans-serif",
+      "mono": "'JetBrains Mono', monospace"
+    },
+    "scale": {
+      "h1": "text-5xl lg:text-7xl tracking-tighter font-medium text-neutral-950",
+      "h2": "text-3xl lg:text-4xl tracking-tight font-medium text-neutral-950",
+      "h3": "text-xl lg:text-2xl tracking-tight font-medium text-neutral-900",
+      "body": "text-base leading-relaxed text-neutral-700",
+      "small": "text-sm text-neutral-500",
+      "label": "text-[10px] md:text-xs tracking-[0.2em] uppercase font-bold text-neutral-400"
+    },
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap",
+      "https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,400,900&display=swap"
+    ]
+  },
+  "colors": {
+    "background": {
+      "page": "bg-[#FAFAFA]",
+      "surface": "bg-white",
+      "inverse": "bg-neutral-950"
+    },
+    "border": {
+      "subtle": "border-neutral-200",
+      "default": "border-neutral-300",
+      "strong": "border-neutral-950"
+    },
+    "text": {
+      "primary": "text-neutral-950",
+      "secondary": "text-neutral-500",
+      "inverse": "text-white",
+      "mono": "text-neutral-600"
+    },
+    "functional": {
+      "air": { "bg": "bg-sky-50", "text": "text-sky-700", "border": "border-sky-200", "icon": "text-sky-600" },
+      "ocean": { "bg": "bg-blue-50", "text": "text-blue-800", "border": "border-blue-200", "icon": "text-blue-700" },
+      "road": { "bg": "bg-emerald-50", "text": "text-emerald-800", "border": "border-emerald-200", "icon": "text-emerald-700" },
+      "status": {
+        "active": "bg-amber-50 text-amber-800 border-amber-200",
+        "completed": "bg-neutral-950 text-white border-neutral-950",
+        "delayed": "bg-red-50 text-red-700 border-red-200"
+      }
+    }
+  },
+  "layout_and_spacing": {
+    "general": "Bento-style grids with sharp 1px borders, zero border-radius (`rounded-none` or `rounded-sm`), generous padding `p-6` to `p-12` inside major sections.",
+    "sidebar": "fixed left-0 top-0 h-screen w-64 border-r border-neutral-200 bg-[#FAFAFA] flex flex-col pt-8 pb-6 px-4 z-40",
+    "main_content": "ml-64 min-h-screen bg-white",
+    "hero_section": "py-24 px-8 md:px-16 border-b border-neutral-200 relative bg-[#FAFAFA] overflow-hidden flex flex-col items-center justify-center text-center",
+    "hero_pattern": "Implement a technical background: a 40px SVG grid pattern using a very faint stroke (e.g., `stroke-neutral-200`) to evoke coordinate tracking.",
+    "shipment_list_section": "px-8 md:px-16 py-12 bg-white flex flex-col gap-6"
+  },
+  "components": {
+    "hero_search": {
+      "wrapper": "max-w-4xl w-full mx-auto flex flex-col gap-8 relative z-10 bg-white p-8 md:p-12 border border-neutral-200 shadow-xl shadow-neutral-950/5",
+      "input_group": "flex items-center gap-4 border-b-2 border-neutral-950 pb-4 transition-all focus-within:border-blue-600",
+      "input": "text-3xl md:text-5xl font-mono tracking-tighter w-full bg-transparent focus:outline-none placeholder:text-neutral-300 uppercase",
+      "button": "bg-neutral-950 text-white px-8 md:px-12 py-4 text-lg font-medium hover:bg-neutral-800 transition-colors shrink-0 flex items-center gap-2"
+    },
+    "multimodal_timeline": {
+      "wrapper": "flex flex-col md:flex-row items-stretch md:items-center w-full mt-12 overflow-x-auto pb-4",
+      "node": "flex flex-col gap-3 min-w-[160px] shrink-0 relative flex-1 group",
+      "node_icon_box": "w-12 h-12 flex items-center justify-center border border-neutral-200 bg-white transition-colors z-10",
+      "connector": "absolute top-6 left-12 w-[calc(100%-3rem)] h-px bg-neutral-200",
+      "connector_active": "absolute top-6 left-12 w-[calc(100%-3rem)] h-px bg-neutral-950",
+      "details": "flex flex-col gap-1 mt-2"
+    },
+    "shipment_list": {
+      "wrapper": "w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+      "card": "border border-neutral-200 bg-white p-6 hover:border-neutral-400 transition-colors flex flex-col gap-4 cursor-pointer"
+    },
+    "badges": {
+      "style": "inline-flex items-center px-2 py-1 text-[11px] font-bold tracking-widest uppercase border border-neutral-200 gap-1.5 whitespace-nowrap"
+    }
+  },
+  "motion_and_interactions": {
+    "hover_states": "Interactive cards and buttons should have a rigid translation `hover:-translate-y-[2px]` and intense shadow `hover:shadow-lg`.",
+    "timeline_reveal": "Use stagger animations for the multimodal timeline nodes. The active/current leg should pulse subtly.",
+    "accessibility": "Use `focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-neutral-950` universally."
+  },
+  "icons_and_assets": {
+    "library": "lucide-react",
+    "instructions": "Use lucide-react (default). Essential icons: Plane, Ship, Truck, PackageCheck, MapPin, Search, ArrowRight, Activity, Globe.",
+    "image_urls": {}
+  },
+  "testing_attributes": [
+    "data-testid='search-shipment-input'",
+    "data-testid='track-shipment-button'",
+    "data-testid='hero-section'",
+    "data-testid='unified-timeline'",
+    "data-testid='timeline-node'",
+    "data-testid='shipment-list-grid'",
+    "data-testid='shipment-card'",
+    "data-testid='status-badge'",
+    "data-testid='sidebar-nav'"
+  ],
+  "instructions_to_main_agent": [
+    "Build the dashboard using pure HTML/Tailwind classes for layout, relying on bento-grid concepts rather than generic cards.",
+    "The Hero section MUST contain a massive input field for the 'Tracking ID'. Below it, if a shipment is tracked, reveal the 'Multimodal Timeline'.",
+    "Create realistic mock data for 3-4 shipments. Example journey: Shenzhen (Origin/Factory) -> Road (Truck) -> Yantian Port -> Ocean (Vessel: Evergreen) -> Long Beach Port -> Road (Truck) -> Los Angeles (Destination).",
+    "Render the multimodal timeline nodes with exact functional colors and icons based on mode (sky blue for Air, deep blue for Ocean, emerald for Road).",
+    "Make sure the typography scale is rigidly applied: massive headings in 'Cabinet Grotesk', technical details in 'JetBrains Mono', and clean body in 'IBM Plex Sans'. Apply tracking-tight and leading-none to headings.",
+    "Use a subtle SVG coordinate grid in the hero background. Pure white/gray background, no gradients.",
+    "Ensure the sidebar has distinct navigation items with hover states, avoiding a generic 'hamburger' on desktop.",
+    "Implement the 'Shipment List' as a grid of dense bento-cards (not a simple table) to show Origin, Destination, current mode icon, and ETA prominently.",
+    "Include 'data-testid' on all interactive and data-display components."
+  ]
+}
