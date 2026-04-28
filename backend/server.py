@@ -1008,6 +1008,253 @@ async def upload_order_docs(file: UploadFile = File(...)):
     }
 
 
+# ============================================================
+# Milestone Templates & Custom Milestones (MongoDB-backed)
+# ============================================================
+class MilestoneItem(BaseModel):
+    code: str
+    label: str
+    offset_pct: float = 50.0  # 0-100, % of leg duration
+
+
+class MilestoneTemplate(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    milestones: dict  # {"air": [MilestoneItem], "ocean": [...], "road": [...]}
+    is_builtin: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class MilestoneTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    milestones: dict
+
+
+class MilestoneTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    milestones: Optional[dict] = None
+
+
+class CustomMilestone(BaseModel):
+    id: str
+    shipment_id: str
+    leg_id: str
+    code: str
+    label: str
+    offset_pct: float = 50.0
+    notes: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class CustomMilestoneCreate(BaseModel):
+    code: str
+    label: str
+    offset_pct: float = 50.0
+    notes: Optional[str] = None
+
+
+def _strip_id(doc):
+    if doc:
+        doc.pop("_id", None)
+    return doc
+
+
+def _strip_ids(docs):
+    return [_strip_id(d) for d in docs]
+
+
+# ----- Default seed template -----
+SEED_TEMPLATE = {
+    "id": "TPL-PHARMA-COLD",
+    "name": "Pharma Cold-Chain",
+    "description": "FDA-regulated cold-chain shipment with temperature & inspection checkpoints.",
+    "is_builtin": True,
+    "milestones": {
+        "air": [
+            {"code": "BKG", "label": "Booking Confirmed", "offset_pct": -10},
+            {"code": "TMP", "label": "Temperature Logger Activated", "offset_pct": -5},
+            {"code": "RCS", "label": "Received at Origin Terminal", "offset_pct": -2},
+            {"code": "QCK", "label": "Pre-flight Quality Check", "offset_pct": 0},
+            {"code": "LOD", "label": "Loaded on Flight (Cold-Stowed)", "offset_pct": 5},
+            {"code": "DEP", "label": "Departed", "offset_pct": 10},
+            {"code": "ARR", "label": "Arrived", "offset_pct": 80},
+            {"code": "CCL", "label": "Customs Clearance (FDA Hold)", "offset_pct": 88},
+            {"code": "QOA", "label": "QA Approval at Destination", "offset_pct": 95},
+            {"code": "NFD", "label": "Ready for Pickup", "offset_pct": 100},
+        ],
+        "ocean": [
+            {"code": "BKG", "label": "Booking Confirmed", "offset_pct": -8},
+            {"code": "TMP", "label": "Reefer Container Pre-Cooled", "offset_pct": -5},
+            {"code": "CST", "label": "Container Stuffed (Sealed)", "offset_pct": -3},
+            {"code": "GTI", "label": "Gate In at Origin Port", "offset_pct": -2},
+            {"code": "QCK", "label": "Pre-load Quality Check", "offset_pct": -1},
+            {"code": "LOD", "label": "Loaded on Vessel", "offset_pct": 0},
+            {"code": "DEP", "label": "Vessel Departed", "offset_pct": 1},
+            {"code": "TRN", "label": "In Transit (Reefer Active)", "offset_pct": 50},
+            {"code": "ARR", "label": "Vessel Arrived", "offset_pct": 95},
+            {"code": "DIS", "label": "Discharged from Vessel", "offset_pct": 96},
+            {"code": "CCL", "label": "Customs Cleared (FDA)", "offset_pct": 98},
+            {"code": "QOA", "label": "QA Approval at Destination", "offset_pct": 99},
+            {"code": "GTO", "label": "Gate Out", "offset_pct": 100},
+        ],
+        "road": [
+            {"code": "PSC", "label": "Pickup Scheduled", "offset_pct": -5},
+            {"code": "PUP", "label": "Picked Up", "offset_pct": 0},
+            {"code": "TRN", "label": "In Transit", "offset_pct": 50},
+            {"code": "TMP", "label": "Temperature Check (Mid-Route)", "offset_pct": 60},
+            {"code": "ARH", "label": "Arrived at Hub", "offset_pct": 80},
+            {"code": "OFD", "label": "Out for Delivery", "offset_pct": 92},
+            {"code": "DLV", "label": "Delivered", "offset_pct": 100},
+        ],
+    },
+}
+
+
+@app.on_event("startup")
+async def _seed_templates():
+    try:
+        existing = await db["milestone_templates"].count_documents({})
+        if existing == 0:
+            seed = {**SEED_TEMPLATE, "created_at": datetime.now(timezone.utc).isoformat()}
+            await db["milestone_templates"].insert_one(seed)
+            logger.info("Seeded default milestone template: %s", SEED_TEMPLATE["name"])
+    except Exception:
+        logger.exception("Failed to seed milestone templates")
+
+
+# ----- Milestone Templates -----
+@api_router.get("/milestone-templates", response_model=List[MilestoneTemplate])
+async def list_milestone_templates():
+    docs = await db["milestone_templates"].find({}).sort("created_at", 1).to_list(length=200)
+    return _strip_ids(docs)
+
+
+@api_router.get("/milestone-templates/{template_id}", response_model=MilestoneTemplate)
+async def get_milestone_template(template_id: str):
+    doc = await db["milestone_templates"].find_one({"id": template_id.upper()})
+    if not doc:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+    return _strip_id(doc)
+
+
+@api_router.post("/milestone-templates", response_model=MilestoneTemplate)
+async def create_milestone_template(body: MilestoneTemplateCreate):
+    if not body.name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    rec = {
+        "id": f"TPL-{uuid.uuid4().hex[:8].upper()}",
+        "name": body.name.strip(),
+        "description": body.description,
+        "milestones": body.milestones or {"air": [], "ocean": [], "road": []},
+        "is_builtin": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db["milestone_templates"].insert_one(rec)
+    return _strip_id(rec)
+
+
+@api_router.patch("/milestone-templates/{template_id}", response_model=MilestoneTemplate)
+async def update_milestone_template(template_id: str, body: MilestoneTemplateUpdate):
+    existing = await db["milestone_templates"].find_one({"id": template_id.upper()})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if existing.get("is_builtin"):
+        raise HTTPException(status_code=400, detail="Built-in templates cannot be modified. Clone instead.")
+    updates = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
+    if updates:
+        await db["milestone_templates"].update_one({"id": template_id.upper()}, {"$set": updates})
+    doc = await db["milestone_templates"].find_one({"id": template_id.upper()})
+    return _strip_id(doc)
+
+
+@api_router.post("/milestone-templates/{template_id}/clone", response_model=MilestoneTemplate)
+async def clone_milestone_template(template_id: str):
+    src = await db["milestone_templates"].find_one({"id": template_id.upper()})
+    if not src:
+        raise HTTPException(status_code=404, detail="Template not found")
+    rec = {
+        "id": f"TPL-{uuid.uuid4().hex[:8].upper()}",
+        "name": f"{src['name']} (Copy)",
+        "description": src.get("description"),
+        "milestones": src.get("milestones", {}),
+        "is_builtin": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db["milestone_templates"].insert_one(rec)
+    return _strip_id(rec)
+
+
+@api_router.delete("/milestone-templates/{template_id}")
+async def delete_milestone_template(template_id: str):
+    doc = await db["milestone_templates"].find_one({"id": template_id.upper()})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if doc.get("is_builtin"):
+        raise HTTPException(status_code=400, detail="Built-in templates cannot be deleted")
+    await db["milestone_templates"].delete_one({"id": template_id.upper()})
+    return {"ok": True, "deleted": template_id}
+
+
+# ----- Custom Milestones (per shipment + leg) -----
+def _shipment_exists(sid: str) -> bool:
+    sid_u = sid.upper()
+    return any(s["id"].upper() == sid_u for s in SHIPMENTS)
+
+
+def _leg_exists(sid: str, leg_id: str) -> bool:
+    sid_u = sid.upper()
+    leg_u = leg_id.upper()
+    for s in SHIPMENTS:
+        if s["id"].upper() == sid_u:
+            return any((l.get("leg_id") or "").upper() == leg_u for l in s.get("legs", []))
+    return False
+
+
+@api_router.get("/shipments/{shipment_id}/custom-milestones", response_model=List[CustomMilestone])
+async def list_custom_milestones(shipment_id: str):
+    if not _shipment_exists(shipment_id):
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    docs = await db["custom_milestones"].find(
+        {"shipment_id": shipment_id.upper()}
+    ).sort("created_at", 1).to_list(length=500)
+    return _strip_ids(docs)
+
+
+@api_router.post(
+    "/shipments/{shipment_id}/legs/{leg_id}/custom-milestones",
+    response_model=CustomMilestone,
+)
+async def add_custom_milestone(shipment_id: str, leg_id: str, body: CustomMilestoneCreate):
+    if not _leg_exists(shipment_id, leg_id):
+        raise HTTPException(status_code=404, detail="Shipment leg not found")
+    if not body.code.strip() or not body.label.strip():
+        raise HTTPException(status_code=400, detail="code and label are required")
+    rec = {
+        "id": f"CMS-{uuid.uuid4().hex[:8].upper()}",
+        "shipment_id": shipment_id.upper(),
+        "leg_id": leg_id.upper(),
+        "code": body.code.strip().upper()[:6],
+        "label": body.label.strip(),
+        "offset_pct": max(-50.0, min(150.0, body.offset_pct)),
+        "notes": (body.notes or "").strip() or None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db["custom_milestones"].insert_one(rec)
+    return _strip_id(rec)
+
+
+@api_router.delete("/custom-milestones/{milestone_id}")
+async def delete_custom_milestone(milestone_id: str):
+    doc = await db["custom_milestones"].find_one({"id": milestone_id.upper()})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Custom milestone not found")
+    await db["custom_milestones"].delete_one({"id": milestone_id.upper()})
+    return {"ok": True, "deleted": milestone_id}
+
+
 app.include_router(api_router)
 
 app.add_middleware(

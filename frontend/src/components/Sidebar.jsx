@@ -3,7 +3,7 @@ import axios from "axios";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Activity, Settings,
-  Globe2, FileSearch, Plug, Receipt,
+  Globe2, FileSearch, Plug, Receipt, Layers,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -26,6 +26,7 @@ export default function Sidebar() {
     { label: "Reverse Search", icon: FileSearch, href: "/reverse-search", testid: "nav-reverse-search" },
     { label: "Integrations", icon: Plug, href: "/integrations", testid: "nav-integrations" },
     { label: "Orders & POs", icon: Receipt, href: "/orders-pos", testid: "nav-orders-pos" },
+    { label: "Milestone Templates", icon: Layers, href: "/templates", testid: "nav-templates" },
   ];
 
   return (

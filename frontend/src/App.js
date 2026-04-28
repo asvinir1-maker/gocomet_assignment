@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import ReverseSearch from "./pages/ReverseSearch";
 import Integrations from "./pages/Integrations";
 import OrdersAndPOs from "./pages/OrdersAndPOs";
+import Templates from "./pages/Templates";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
             <Route path="/reverse-search" element={<ReverseSearch />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/orders-pos" element={<OrdersAndPOs />} />
+            <Route path="/templates" element={<Templates />} />
             <Route path="/shipment/:id" element={<ShipmentDetail />} />
             <Route path="/order/:orderNo" element={<CustomerOrderDetail />} />
           </Routes>

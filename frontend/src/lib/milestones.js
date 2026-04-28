@@ -1,110 +1,134 @@
-// Mode-specific milestone definitions for each journey leg.
-// Codes follow common logistics conventions (RCS/LOD/DEP/ARR/NFD/etc.)
+// =============================================================
+// Milestone engine
+// - Standard mode-based milestones (defaults below)
+// - Optional template (replaces the standard set per mode)
+// - Optional per-leg custom milestones (added on top)
+// - Each milestone has an offset_pct: % position relative to leg
+//     -50 = before leg started, 0 = at leg.departure,
+//     100 = at leg.arrival, 150 = after leg ended
+// =============================================================
 
-const AIR_MILESTONES = [
-  { code: "BKG", label: "Booking Confirmed" },
-  { code: "RCS", label: "Received at Origin Terminal" },
-  { code: "LOD", label: "Loaded on Flight" },
-  { code: "DEP", label: "Departed" },
-  { code: "ARR", label: "Arrived" },
-  { code: "CCL", label: "Customs Clearance" },
-  { code: "NFD", label: "Ready for Pickup" },
+// Standard milestones with realistic offset_pct positions inside the leg
+const STANDARD_AIR = [
+  { code: "BKG", label: "Booking Confirmed", offset_pct: -10 },
+  { code: "RCS", label: "Received at Origin Terminal", offset_pct: -2 },
+  { code: "LOD", label: "Loaded on Flight", offset_pct: 5 },
+  { code: "DEP", label: "Departed", offset_pct: 10 },
+  { code: "ARR", label: "Arrived", offset_pct: 80 },
+  { code: "CCL", label: "Customs Clearance", offset_pct: 92 },
+  { code: "NFD", label: "Ready for Pickup", offset_pct: 100 },
 ];
 
-const OCEAN_MILESTONES = [
-  { code: "BKG", label: "Booking Confirmed" },
-  { code: "CST", label: "Container Stuffed" },
-  { code: "GTI", label: "Gate In at Origin Port" },
-  { code: "LOD", label: "Loaded on Vessel" },
-  { code: "DEP", label: "Vessel Departed" },
-  { code: "TRN", label: "In Transit" },
-  { code: "ARR", label: "Vessel Arrived" },
-  { code: "DIS", label: "Discharged from Vessel" },
-  { code: "CCL", label: "Customs Cleared" },
-  { code: "GTO", label: "Gate Out" },
+const STANDARD_OCEAN = [
+  { code: "BKG", label: "Booking Confirmed", offset_pct: -8 },
+  { code: "CST", label: "Container Stuffed", offset_pct: -3 },
+  { code: "GTI", label: "Gate In at Origin Port", offset_pct: -2 },
+  { code: "LOD", label: "Loaded on Vessel", offset_pct: -1 },
+  { code: "DEP", label: "Vessel Departed", offset_pct: 0 },
+  { code: "TRN", label: "In Transit", offset_pct: 50 },
+  { code: "ARR", label: "Vessel Arrived", offset_pct: 95 },
+  { code: "DIS", label: "Discharged from Vessel", offset_pct: 96 },
+  { code: "CCL", label: "Customs Cleared", offset_pct: 98 },
+  { code: "GTO", label: "Gate Out", offset_pct: 100 },
 ];
 
-const ROAD_MILESTONES = [
-  { code: "PSC", label: "Pickup Scheduled" },
-  { code: "PUP", label: "Picked Up" },
-  { code: "TRN", label: "In Transit" },
-  { code: "ARH", label: "Arrived at Hub" },
-  { code: "OFD", label: "Out for Delivery" },
-  { code: "DLV", label: "Delivered" },
+const STANDARD_ROAD = [
+  { code: "PSC", label: "Pickup Scheduled", offset_pct: -5 },
+  { code: "PUP", label: "Picked Up", offset_pct: 0 },
+  { code: "TRN", label: "In Transit", offset_pct: 50 },
+  { code: "ARH", label: "Arrived at Hub", offset_pct: 75 },
+  { code: "OFD", label: "Out for Delivery", offset_pct: 92 },
+  { code: "DLV", label: "Delivered", offset_pct: 100 },
 ];
 
-const MODE_MAP = {
-  air: AIR_MILESTONES,
-  ocean: OCEAN_MILESTONES,
-  road: ROAD_MILESTONES,
+export const STANDARD_TEMPLATE = {
+  id: "TPL-STANDARD",
+  name: "Standard",
+  description: "Default mode-based milestones (built-in)",
+  is_builtin: true,
+  is_standard: true,
+  milestones: { air: STANDARD_AIR, ocean: STANDARD_OCEAN, road: STANDARD_ROAD },
 };
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
+// ---- Generic helpers ----
 export const daysBetween = (a, b) => {
   if (!a || !b) return 0;
   const ms = new Date(b).getTime() - new Date(a).getTime();
-  return Math.max(0, Math.round((ms / DAY) * 10) / 10); // 1 decimal
+  return Math.max(0, Math.round((ms / DAY) * 10) / 10);
 };
-
 export const daysBetweenInt = (a, b) => Math.round(daysBetween(a, b));
-
-export const getJourneyStart = (legs) => {
-  if (!legs || !legs.length) return null;
-  return legs[0].departure;
-};
-
-export const getJourneyEnd = (legs) => {
-  if (!legs || !legs.length) return null;
-  return legs[legs.length - 1].arrival;
-};
-
+export const getJourneyStart = (legs) => (legs && legs.length ? legs[0].departure : null);
+export const getJourneyEnd = (legs) => (legs && legs.length ? legs[legs.length - 1].arrival : null);
 export const getJourneyDurationDays = (legs) => {
-  const s = getJourneyStart(legs);
-  const e = getJourneyEnd(legs);
-  if (!s || !e) return 0;
-  return daysBetweenInt(s, e);
+  const s = getJourneyStart(legs), e = getJourneyEnd(legs);
+  return s && e ? daysBetweenInt(s, e) : 0;
 };
-
 export const getLegDurationDays = (leg) => daysBetween(leg.departure, leg.arrival);
 
-/**
- * Generate milestones for a leg with planned/actual dates and per-milestone
- * status derived from the parent leg's overall status.
- *
- * Returns: [{ code, label, planned, actual, status }]
- *   status ∈ "completed" | "current" | "delayed" | "upcoming"
- */
-export function getLegMilestones(leg) {
-  if (!leg) return [];
-  const list = MODE_MAP[leg.mode] || ROAD_MILESTONES;
+// ---- Milestone resolution ----
+function resolveBaseMilestones(leg, template) {
+  const tpl = template && template.milestones ? template : STANDARD_TEMPLATE;
+  const list = (tpl.milestones && tpl.milestones[leg.mode]) || [];
+  if (list.length === 0) {
+    // Fallback to standard if template lacks this mode
+    return STANDARD_TEMPLATE.milestones[leg.mode] || [];
+  }
+  return list;
+}
+
+function offsetToTimestamp(leg, offsetPct) {
   const dep = new Date(leg.departure).getTime();
   const arr = new Date(leg.arrival).getTime();
   const span = Math.max(arr - dep, HOUR);
-  const N = list.length;
+  return new Date(dep + (span * offsetPct) / 100).toISOString();
+}
 
-  // Distribute milestone planned timestamps across the leg window.
-  // First milestone = small offset before dep, last = at arrival.
-  const planned = list.map((m, i) => {
-    let ts;
-    if (i === 0) {
-      // Booking / pickup-scheduled is before the actual leg starts.
-      ts = dep - Math.min(span * 0.15, DAY);
-    } else if (i === N - 1) {
-      ts = arr;
-    } else {
-      ts = dep + (span * i) / (N - 1);
-    }
-    return { ...m, planned: new Date(ts).toISOString() };
-  });
+/**
+ * Build the resolved milestone list for a leg, given an optional template
+ * and optional per-leg custom milestones. Custom milestones are merged in
+ * by offset_pct and tagged with custom: true so the UI can show a remove btn.
+ */
+export function getLegMilestones(leg, options = {}) {
+  if (!leg) return [];
+  const { template = null, customMilestones = [] } = options;
+
+  const baseList = resolveBaseMilestones(leg, template).map((m) => ({
+    code: m.code,
+    label: m.label,
+    offset_pct: typeof m.offset_pct === "number" ? m.offset_pct : 50,
+    custom: false,
+  }));
+
+  const legCustom = (customMilestones || [])
+    .filter((c) => (c.leg_id || "").toUpperCase() === (leg.leg_id || "").toUpperCase())
+    .map((c) => ({
+      code: c.code,
+      label: c.label,
+      offset_pct: typeof c.offset_pct === "number" ? c.offset_pct : 50,
+      custom: true,
+      custom_id: c.id,
+      notes: c.notes || null,
+    }));
+
+  // Merge + sort by offset_pct
+  const merged = [...baseList, ...legCustom].sort((a, b) => a.offset_pct - b.offset_pct);
+
+  // Compute planned ts from offset
+  const withTs = merged.map((m) => ({
+    ...m,
+    planned: offsetToTimestamp(leg, m.offset_pct),
+  }));
 
   const now = Date.now();
+  const N = withTs.length;
   const legStatus = leg.status;
 
-  return planned.map((m, i) => {
+  return withTs.map((m, i) => {
     const t = new Date(m.planned).getTime();
-    const prevT = i > 0 ? new Date(planned[i - 1].planned).getTime() : -Infinity;
+    const prevT = i > 0 ? new Date(withTs[i - 1].planned).getTime() : -Infinity;
 
     let status = "upcoming";
     let actual = null;
@@ -116,18 +140,12 @@ export function getLegMilestones(leg) {
       status = "upcoming";
     } else if (legStatus === "in_transit" || legStatus === "active") {
       if (i === N - 1) {
-        // For in-transit legs, the FINAL milestone stays open until the
-        // leg itself is marked completed — even if "now" is past the
-        // planned timestamp (otherwise mock data with old dates would
-        // visually contradict the leg's IN TRANSIT badge).
         status = prevT <= now ? "current" : "upcoming";
       } else if (t <= now) {
         status = "completed";
         actual = m.planned;
       } else if (prevT <= now) {
         status = "current";
-      } else {
-        status = "upcoming";
       }
     } else if (legStatus === "delayed") {
       if (i === N - 1) {
@@ -137,16 +155,14 @@ export function getLegMilestones(leg) {
         actual = m.planned;
       } else if (prevT <= now) {
         status = "delayed";
-      } else {
-        status = "upcoming";
       }
     }
     return { ...m, status, actual };
   });
 }
 
-export function getMilestoneSummary(leg) {
-  const ms = getLegMilestones(leg);
-  const completed = ms.filter((m) => m.status === "completed").length;
-  return { completed, total: ms.length, milestones: ms };
+export function getMilestoneSummary(leg, options = {}) {
+  const milestones = getLegMilestones(leg, options);
+  const completed = milestones.filter((m) => m.status === "completed").length;
+  return { completed, total: milestones.length, milestones };
 }

@@ -13,7 +13,7 @@ const stepStatusColor = (status) => {
   return "bg-neutral-300";
 };
 
-export default function MultimodalTimeline({ shipment }) {
+export default function MultimodalTimeline({ shipment, template = null, customMilestones = [], onCustomChanged = null }) {
   if (!shipment) return null;
   const { legs, progress } = shipment;
   const journeyStart = getJourneyStart(legs);
@@ -117,7 +117,15 @@ export default function MultimodalTimeline({ shipment }) {
                     )}
                   </div>
 
-                  <LegMilestones leg={leg} journeyStart={journeyStart} defaultOpen={active} />
+                  <LegMilestones
+                    shipmentId={shipment.id}
+                    leg={leg}
+                    journeyStart={journeyStart}
+                    template={template}
+                    customMilestones={customMilestones}
+                    defaultOpen={active}
+                    onCustomChanged={onCustomChanged}
+                  />
                 </div>
                 {!isLast && (
                   <div className="hidden md:flex items-center justify-center w-8 -mx-4 z-10 bg-white">

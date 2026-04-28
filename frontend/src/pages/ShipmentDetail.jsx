@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import axios from "axios";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Layers, ChevronDown } from "lucide-react";
 import MultimodalTimeline from "../components/MultimodalTimeline";
 import StatusBadge from "../components/StatusBadge";
 import LinkedOrdersPanel from "../components/LinkedOrdersPanel";
 import LinkedDocsPanel from "../components/integrations/LinkedDocsPanel";
+import { listTemplates, listCustomMilestones } from "../lib/templatesApi";
+import { STANDARD_TEMPLATE } from "../lib/milestones";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -16,6 +18,19 @@ export default function ShipmentDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Templates + custom milestones
+  const [templates, setTemplates] = useState([STANDARD_TEMPLATE]);
+  const [activeTplId, setActiveTplId] = useState(() => {
+    return localStorage.getItem(`uniroute-tpl-${id}`) || STANDARD_TEMPLATE.id;
+  });
+  const [customMilestones, setCustomMilestones] = useState([]);
+  const [tplMenuOpen, setTplMenuOpen] = useState(false);
+
+  const reloadCustoms = useCallback(() => {
+    if (!id) return;
+    listCustomMilestones(id).then(setCustomMilestones).catch(() => setCustomMilestones([]));
+  }, [id]);
+
   useEffect(() => {
     setLoading(true);
     axios.get(`${API}/shipments/${id}`)
@@ -25,7 +40,17 @@ export default function ShipmentDetail() {
     axios.get(`${API}/orders-docs/by-shipment/${id}`)
       .then((r) => setDocs(r.data || []))
       .catch(() => setDocs([]));
-  }, [id]);
+    listTemplates()
+      .then((tpls) => setTemplates([STANDARD_TEMPLATE, ...tpls]))
+      .catch(() => setTemplates([STANDARD_TEMPLATE]));
+    reloadCustoms();
+  }, [id, reloadCustoms]);
+
+  useEffect(() => {
+    localStorage.setItem(`uniroute-tpl-${id}`, activeTplId);
+  }, [activeTplId, id]);
+
+  const activeTemplate = templates.find((t) => t.id === activeTplId) || STANDARD_TEMPLATE;
 
   return (
     <div className="px-6 md:px-12 py-10 bg-white min-h-screen" data-testid="shipment-detail-page">
@@ -69,7 +94,79 @@ export default function ShipmentDetail() {
                 <StatusBadge status={shipment.status} />
               </div>
             </div>
-            <MultimodalTimeline shipment={shipment} />
+
+            {/* Template selector */}
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 bg-neutral-50 border border-neutral-200 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <Layers className="w-4 h-4 text-neutral-500" />
+                <div>
+                  <div className="text-[10px] tracking-[0.25em] uppercase font-bold text-neutral-400">Milestone View</div>
+                  <div className="font-mono text-xs text-neutral-700 mt-0.5">
+                    {activeTemplate.name}
+                    {activeTemplate.description && (
+                      <span className="text-neutral-400"> · {activeTemplate.description}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="relative">
+                <button
+                  data-testid="template-selector-btn"
+                  onClick={() => setTplMenuOpen(!tplMenuOpen)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-neutral-300 text-sm hover:border-neutral-500 transition-colors"
+                >
+                  Switch view
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${tplMenuOpen ? "rotate-180" : ""}`} />
+                </button>
+                {tplMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setTplMenuOpen(false)} />
+                    <div
+                      data-testid="template-selector-menu"
+                      className="absolute right-0 top-full mt-1 w-72 bg-white border border-neutral-200 shadow-lg z-40"
+                    >
+                      {templates.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setActiveTplId(t.id);
+                            setTplMenuOpen(false);
+                          }}
+                          data-testid={`template-option-${t.id}`}
+                          className={`w-full text-left px-3 py-2.5 text-sm border-b border-neutral-100 hover:bg-neutral-50 ${
+                            t.id === activeTplId ? "bg-neutral-100" : ""
+                          }`}
+                        >
+                          <div className="font-medium text-neutral-950 flex items-center gap-2">
+                            {t.name}
+                            {t.is_builtin && (
+                              <span className="font-mono text-[9px] px-1 py-0.5 bg-neutral-200 text-neutral-700">BUILT-IN</span>
+                            )}
+                          </div>
+                          {t.description && (
+                            <div className="text-[11px] text-neutral-500 mt-0.5 leading-tight">{t.description}</div>
+                          )}
+                        </button>
+                      ))}
+                      <Link
+                        to="/templates"
+                        className="block px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 font-medium"
+                        onClick={() => setTplMenuOpen(false)}
+                      >
+                        + Manage templates
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <MultimodalTimeline
+              shipment={shipment}
+              template={activeTemplate}
+              customMilestones={customMilestones}
+              onCustomChanged={reloadCustoms}
+            />
             {shipment.linked_orders && <LinkedOrdersPanel orders={shipment.linked_orders} />}
             <LinkedDocsPanel docs={docs} />
           </>
