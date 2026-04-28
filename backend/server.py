@@ -70,6 +70,7 @@ class Shipment(BaseModel):
     order_number: Optional[str] = None
     parent_shipment_id: Optional[str] = None
     linked_orders: Optional[List[LinkedOrder]] = None
+    delay_days: int = 0  # number of days delayed beyond originally promised ETA
 
 
 # ---------- Mock Data ----------
@@ -252,6 +253,7 @@ SHIPMENTS: List[dict] = [
         "weight_kg": 22100.0,
         "container_count": 2,
         "booking_date": "2025-11-02",
+        "delay_days": 12,
         "legs": [
             {
                 "leg_id": "L1", "sequence": 1, "mode": "ocean",

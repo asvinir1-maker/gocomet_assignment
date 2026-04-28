@@ -92,28 +92,24 @@ class TestGetShipment:
 
 # --- get order by order_number (customer endpoint) ---
 class TestGetOrder:
-    def test_order_7821_five_legs(self, api):
+    def test_order_7821_legs(self, api):
         r = api.get(f"{BASE_URL}/api/orders/ORD-IN-7821", timeout=15)
         assert r.status_code == 200
         data = r.json()
         assert data["customer_name"] == "Rahul Sharma"
         assert data["customer_city"] == "Bengaluru"
         assert "UltraBook 14 Pro" in data["product"]
-        assert len(data["legs"]) == 5
+        # Iteration 3: ORD-IN-7821 has 4 legs (road, ocean, road, road)
+        assert len(data["legs"]) == 4
         modes = [l["mode"] for l in data["legs"]]
-        assert modes == ["road", "ocean", "road", "air", "road"]
+        assert modes == ["road", "ocean", "road", "road"]
         # international leg should be ocean Houston->Mundra
         ocean = data["legs"][1]
         assert ocean["mode"] == "ocean"
         assert "Houston" in ocean["from_location"]
         assert "Mundra" in ocean["to_location"]
-        # domestic india air DEL->BLR
-        air = data["legs"][3]
-        assert air["mode"] == "air"
-        assert air["from_code"] == "DEL"
-        assert air["to_code"] == "BLR"
         # last leg road BLR-HUB -> BLR-HOME
-        last = data["legs"][4]
+        last = data["legs"][-1]
         assert last["mode"] == "road"
         assert last["from_code"] == "BLR-HUB"
         assert last["to_code"] == "BLR-HOME"
@@ -139,3 +135,33 @@ class TestGetOrder:
     def test_order_invalid_404(self, api):
         r = api.get(f"{BASE_URL}/api/orders/INVALID", timeout=15)
         assert r.status_code == 404
+
+
+# --- delay_days field (iteration 3) ---
+class TestDelayDays:
+    def test_4209_has_delay_12(self, api):
+        r = api.get(f"{BASE_URL}/api/shipments/SHP-2025-4209", timeout=15)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["delay_days"] == 12
+        assert data["status"] == "delayed"
+
+    def test_others_default_delay_zero(self, api):
+        r = api.get(f"{BASE_URL}/api/shipments", timeout=15)
+        assert r.status_code == 200
+        data = r.json()
+        # All shipments should have delay_days; only 4209 != 0
+        for s in data:
+            assert "delay_days" in s
+            if s["id"] == "SHP-2025-4209":
+                assert s["delay_days"] == 12
+            else:
+                assert s["delay_days"] == 0
+
+    def test_count_delayed_over_7_days(self, api):
+        r = api.get(f"{BASE_URL}/api/shipments", timeout=15)
+        assert r.status_code == 200
+        data = r.json()
+        over7 = [s for s in data if s.get("delay_days", 0) >= 7]
+        assert len(over7) == 1
+        assert over7[0]["id"] == "SHP-2025-4209"

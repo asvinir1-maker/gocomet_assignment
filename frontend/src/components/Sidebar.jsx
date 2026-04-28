@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/#workspace", testid: "nav-dashboard" },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", testid: "nav-dashboard" },
   { label: "All Shipments", icon: Globe2, href: "/#workspace", testid: "nav-all", badge: "4" },
   { label: "In Transit", icon: Truck, href: "/?status=active#workspace", testid: "nav-transit", badge: "2" },
   { label: "Completed", icon: PackageCheck, href: "/?status=completed#workspace", testid: "nav-completed", badge: "1" },
