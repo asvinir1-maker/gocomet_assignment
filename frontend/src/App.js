@@ -6,6 +6,7 @@ import Landing from "./pages/Landing";
 import ShipmentDetail from "./pages/ShipmentDetail";
 import CustomerOrderDetail from "./pages/CustomerOrderDetail";
 import Dashboard from "./pages/Dashboard";
+import ReverseSearch from "./pages/ReverseSearch";
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/reverse-search" element={<ReverseSearch />} />
             <Route path="/shipment/:id" element={<ShipmentDetail />} />
             <Route path="/order/:orderNo" element={<CustomerOrderDetail />} />
           </Routes>

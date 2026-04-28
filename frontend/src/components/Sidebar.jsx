@@ -2,12 +2,13 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Activity, PackageCheck, Hourglass, Truck,
-  Star, AlertCircle, Trash2, Settings, Globe2,
+  Star, AlertCircle, Trash2, Settings, Globe2, FileSearch,
 } from "lucide-react";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", testid: "nav-dashboard" },
   { label: "All Shipments", icon: Globe2, href: "/#workspace", testid: "nav-all", badge: "4" },
+  { label: "Reverse Search", icon: FileSearch, href: "/reverse-search", testid: "nav-reverse-search" },
   { label: "In Transit", icon: Truck, href: "/?status=active#workspace", testid: "nav-transit", badge: "2" },
   { label: "Completed", icon: PackageCheck, href: "/?status=completed#workspace", testid: "nav-completed", badge: "1" },
   { label: "Delayed", icon: AlertCircle, href: "/?status=delayed#workspace", testid: "nav-delayed", badge: "1" },

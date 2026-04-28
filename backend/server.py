@@ -35,6 +35,8 @@ class JourneyLeg(BaseModel):
     arrival: str     # ISO date
     status: Literal["completed", "in_transit", "scheduled", "delayed"]
     notes: Optional[str] = None
+    bl_number: Optional[str] = None     # Ocean Bill of Lading
+    awb_number: Optional[str] = None    # Air Waybill
 
 
 class LinkedOrder(BaseModel):
@@ -113,6 +115,7 @@ SHIPMENTS: List[dict] = [
                 "arrival": "2025-12-19T06:00:00Z",
                 "status": "in_transit",
                 "notes": "Vessel currently 1,850 nm from destination.",
+                "bl_number": "MAEU-245W-7710321",
             },
             {
                 "leg_id": "L3", "sequence": 3, "mode": "road",
@@ -163,6 +166,7 @@ SHIPMENTS: List[dict] = [
                 "departure": "2025-11-27T22:30:00Z",
                 "arrival": "2025-11-28T03:50:00Z",
                 "status": "completed",
+                "awb_number": "020-77881664",
             },
             {
                 "leg_id": "L3", "sequence": 3, "mode": "road",
@@ -213,6 +217,7 @@ SHIPMENTS: List[dict] = [
                 "arrival": "2025-12-22T04:00:00Z",
                 "status": "in_transit",
                 "notes": "Suez canal crossing scheduled Dec 8.",
+                "bl_number": "MEDU-118E-3320915",
             },
             {
                 "leg_id": "L3", "sequence": 3, "mode": "air",
@@ -265,6 +270,7 @@ SHIPMENTS: List[dict] = [
                 "arrival": "2025-12-15T08:00:00Z",
                 "status": "completed",
                 "notes": "Vessel delayed 4 days at Singapore.",
+                "bl_number": "ONEY-022S-4421809",
             },
             {
                 "leg_id": "L2", "sequence": 2, "mode": "road",
@@ -335,6 +341,7 @@ SHIPMENTS: List[dict] = [
                 "arrival": "2026-01-04T07:00:00Z",
                 "status": "in_transit",
                 "notes": "Vessel transiting Cape of Good Hope; ETA Mundra unchanged.",
+                "bl_number": "MAEU-547W-9821044",
             },
             {
                 "leg_id": "L3", "sequence": 3, "mode": "road",
@@ -393,6 +400,7 @@ SHIPMENTS: List[dict] = [
                 "arrival": "2026-01-04T07:00:00Z",
                 "status": "in_transit",
                 "notes": "On the high seas — international transit.",
+                "bl_number": "MAEU-547W-9821044",
             },
             {
                 "leg_id": "L3", "sequence": 3, "mode": "road",
@@ -462,6 +470,7 @@ SHIPMENTS: List[dict] = [
                 "arrival": "2026-01-04T07:00:00Z",
                 "status": "in_transit",
                 "notes": "On the high seas — international transit.",
+                "bl_number": "MAEU-547W-9821044",
             },
             {
                 "leg_id": "L3", "sequence": 3, "mode": "road",
@@ -527,6 +536,72 @@ async def get_order(order_number: str):
                 or s["reference"].upper() == oid):
             return s
     raise HTTPException(status_code=404, detail=f"Order '{order_number}' not found")
+
+
+class ReverseMatch(BaseModel):
+    shipment_id: str
+    audience: str
+    reference: str
+    consignor: str
+    consignee: str
+    origin: str
+    destination: str
+    origin_country: str
+    destination_country: str
+    status: str
+    eta: str
+    progress: int
+    modes: List[str]
+    matched_leg: JourneyLeg
+    matched_field: Literal["bl_number", "awb_number", "vehicle_ref"]
+
+
+class ReverseSearchResponse(BaseModel):
+    query: str
+    count: int
+    matches: List[ReverseMatch]
+
+
+@api_router.get("/reverse-search", response_model=ReverseSearchResponse)
+async def reverse_search(q: str):
+    """Reverse-search shipments by Bill of Lading (B/L), Air Waybill (AWB),
+    or vehicle/vessel/flight reference. Returns ALL matching shipments —
+    useful when a single B/L covers multiple consolidated shipments."""
+    needle = (q or "").strip().upper()
+    if not needle:
+        raise HTTPException(status_code=400, detail="Query must not be empty")
+
+    matches: List[dict] = []
+    for s in SHIPMENTS:
+        for leg in s.get("legs", []):
+            bl = (leg.get("bl_number") or "").upper()
+            awb = (leg.get("awb_number") or "").upper()
+            vref = (leg.get("vehicle_ref") or "").upper()
+            field = None
+            if bl and needle in bl: field = "bl_number"
+            elif awb and needle in awb: field = "awb_number"
+            elif vref and needle in vref: field = "vehicle_ref"
+            if field:
+                matches.append({
+                    "shipment_id": s["id"],
+                    "audience": s.get("audience", "shipper"),
+                    "reference": s["reference"],
+                    "consignor": s["consignor"],
+                    "consignee": s["consignee"],
+                    "origin": s["origin"],
+                    "destination": s["destination"],
+                    "origin_country": s["origin_country"],
+                    "destination_country": s["destination_country"],
+                    "status": s["status"],
+                    "eta": s["eta"],
+                    "progress": s["progress"],
+                    "modes": s["modes"],
+                    "matched_leg": leg,
+                    "matched_field": field,
+                })
+                break  # one match per shipment
+
+    return {"query": q, "count": len(matches), "matches": matches}
 
 
 app.include_router(api_router)
