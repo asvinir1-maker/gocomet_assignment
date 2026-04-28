@@ -129,7 +129,7 @@ export default function FilterRail({ filters, setFilters, options, counts, onCle
       </Section>
 
       {/* Delay threshold */}
-      <Section title="Delay" defaultOpen={false} testid="filter-section-delay">
+      <Section title="Delay" testid="filter-section-delay">
         {[
           { v: 0, l: "Any" },
           { v: 1, l: "Delayed (1+ days)" },

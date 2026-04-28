@@ -184,7 +184,7 @@ export default function ShipmentTable({ rows }) {
               data-testid="page-size"
               className="ml-2 border border-neutral-200 px-2 py-1 text-xs font-mono bg-white"
             >
-              {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              {[5, 10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
           <div className="flex items-center gap-1">
