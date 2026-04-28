@@ -1,72 +1,292 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
+from pydantic import BaseModel, Field
+from typing import List, Optional, Literal
 
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# ---------- Models ----------
+class JourneyLeg(BaseModel):
+    leg_id: str
+    sequence: int
+    mode: Literal["road", "ocean", "air"]
+    carrier: str
+    vehicle_ref: str  # truck plate / vessel name+voyage / flight number
+    from_location: str
+    from_code: str
+    to_location: str
+    to_code: str
+    departure: str   # ISO date
+    arrival: str     # ISO date
+    status: Literal["completed", "in_transit", "scheduled", "delayed"]
+    notes: Optional[str] = None
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
 
-# Add your routes to the router instead of directly to app
+class Shipment(BaseModel):
+    id: str
+    reference: str
+    consignor: str
+    consignee: str
+    origin: str
+    destination: str
+    origin_country: str
+    destination_country: str
+    status: Literal["active", "completed", "delayed", "scheduled"]
+    eta: str
+    progress: int  # 0-100
+    modes: List[Literal["road", "ocean", "air"]]
+    weight_kg: float
+    container_count: int
+    booking_date: str
+    legs: List[JourneyLeg]
+
+
+# ---------- Mock Data ----------
+SHIPMENTS: List[dict] = [
+    {
+        "id": "SHP-2025-1042",
+        "reference": "PO-88421-A",
+        "consignor": "Shenzhen Apex Electronics Co.",
+        "consignee": "Pacific Rim Distribution LLC",
+        "origin": "Shenzhen, China",
+        "destination": "Los Angeles, USA",
+        "origin_country": "CN",
+        "destination_country": "US",
+        "status": "active",
+        "eta": "2025-12-22",
+        "progress": 62,
+        "modes": ["road", "ocean", "road"],
+        "weight_kg": 18420.5,
+        "container_count": 1,
+        "booking_date": "2025-11-08",
+        "legs": [
+            {
+                "leg_id": "L1", "sequence": 1, "mode": "road",
+                "carrier": "Sinotrans Logistics",
+                "vehicle_ref": "TRK-粤B-9X42",
+                "from_location": "Apex Factory, Bao'an", "from_code": "SZX-FAC",
+                "to_location": "Yantian Port", "to_code": "CNYTN",
+                "departure": "2025-11-09T08:00:00Z",
+                "arrival": "2025-11-09T14:30:00Z",
+                "status": "completed",
+                "notes": "Customs cleared at port gate.",
+            },
+            {
+                "leg_id": "L2", "sequence": 2, "mode": "ocean",
+                "carrier": "Maersk Line",
+                "vehicle_ref": "MV EVER GIVEN / V.245W",
+                "from_location": "Yantian Port", "from_code": "CNYTN",
+                "to_location": "Long Beach Port", "to_code": "USLGB",
+                "departure": "2025-11-12T22:00:00Z",
+                "arrival": "2025-12-19T06:00:00Z",
+                "status": "in_transit",
+                "notes": "Vessel currently 1,850 nm from destination.",
+            },
+            {
+                "leg_id": "L3", "sequence": 3, "mode": "road",
+                "carrier": "USA Trucking Inc.",
+                "vehicle_ref": "TRK-CA-LB7821",
+                "from_location": "Long Beach Port", "from_code": "USLGB",
+                "to_location": "Pacific Rim DC, Los Angeles", "to_code": "LAX-DC1",
+                "departure": "2025-12-19T14:00:00Z",
+                "arrival": "2025-12-22T17:00:00Z",
+                "status": "scheduled",
+                "notes": "Drayage scheduled post discharge.",
+            },
+        ],
+    },
+    {
+        "id": "SHP-2025-2081",
+        "reference": "PO-77310-B",
+        "consignor": "BMW Werk München",
+        "consignee": "Northeast Auto Parts NJ",
+        "origin": "Munich, Germany",
+        "destination": "Newark, USA",
+        "origin_country": "DE",
+        "destination_country": "US",
+        "status": "completed",
+        "eta": "2025-11-30",
+        "progress": 100,
+        "modes": ["road", "air", "road"],
+        "weight_kg": 2840.0,
+        "container_count": 0,
+        "booking_date": "2025-11-25",
+        "legs": [
+            {
+                "leg_id": "L1", "sequence": 1, "mode": "road",
+                "carrier": "DB Schenker",
+                "vehicle_ref": "TRK-M-AC2901",
+                "from_location": "BMW Plant, Munich", "from_code": "MUC-FAC",
+                "to_location": "Frankfurt Airport Cargo", "to_code": "FRA",
+                "departure": "2025-11-26T05:00:00Z",
+                "arrival": "2025-11-26T11:45:00Z",
+                "status": "completed",
+            },
+            {
+                "leg_id": "L2", "sequence": 2, "mode": "air",
+                "carrier": "Lufthansa Cargo",
+                "vehicle_ref": "LH-8164 (B777F)",
+                "from_location": "Frankfurt Airport", "from_code": "FRA",
+                "to_location": "JFK International Airport", "to_code": "JFK",
+                "departure": "2025-11-27T22:30:00Z",
+                "arrival": "2025-11-28T03:50:00Z",
+                "status": "completed",
+            },
+            {
+                "leg_id": "L3", "sequence": 3, "mode": "road",
+                "carrier": "XPO Logistics",
+                "vehicle_ref": "TRK-NJ-4421",
+                "from_location": "JFK Airport", "from_code": "JFK",
+                "to_location": "Northeast Auto DC, Newark", "to_code": "EWR-DC",
+                "departure": "2025-11-29T09:00:00Z",
+                "arrival": "2025-11-30T13:00:00Z",
+                "status": "completed",
+            },
+        ],
+    },
+    {
+        "id": "SHP-2025-3155",
+        "reference": "PO-99020-C",
+        "consignor": "Reliance Textiles, Mumbai",
+        "consignee": "Midwest Apparel Group",
+        "origin": "Mumbai, India",
+        "destination": "Chicago, USA",
+        "origin_country": "IN",
+        "destination_country": "US",
+        "status": "active",
+        "eta": "2026-01-08",
+        "progress": 45,
+        "modes": ["road", "ocean", "air", "road"],
+        "weight_kg": 9650.0,
+        "container_count": 1,
+        "booking_date": "2025-11-20",
+        "legs": [
+            {
+                "leg_id": "L1", "sequence": 1, "mode": "road",
+                "carrier": "TCI Express",
+                "vehicle_ref": "TRK-MH-04-TY331",
+                "from_location": "Reliance Mill, Mumbai", "from_code": "BOM-FAC",
+                "to_location": "Nhava Sheva Port", "to_code": "INNSA",
+                "departure": "2025-11-21T07:00:00Z",
+                "arrival": "2025-11-21T15:00:00Z",
+                "status": "completed",
+            },
+            {
+                "leg_id": "L2", "sequence": 2, "mode": "ocean",
+                "carrier": "MSC Mediterranean",
+                "vehicle_ref": "MSC AURORA / V.118E",
+                "from_location": "Nhava Sheva Port", "from_code": "INNSA",
+                "to_location": "Rotterdam Port", "to_code": "NLRTM",
+                "departure": "2025-11-23T18:00:00Z",
+                "arrival": "2025-12-22T04:00:00Z",
+                "status": "in_transit",
+                "notes": "Suez canal crossing scheduled Dec 8.",
+            },
+            {
+                "leg_id": "L3", "sequence": 3, "mode": "air",
+                "carrier": "KLM Cargo",
+                "vehicle_ref": "KL-8615 (B747-400F)",
+                "from_location": "Amsterdam Schiphol", "from_code": "AMS",
+                "to_location": "Chicago O'Hare", "to_code": "ORD",
+                "departure": "2026-01-04T22:15:00Z",
+                "arrival": "2026-01-05T02:45:00Z",
+                "status": "scheduled",
+                "notes": "Ocean-to-air transfer at Rotterdam ➜ Schiphol.",
+            },
+            {
+                "leg_id": "L4", "sequence": 4, "mode": "road",
+                "carrier": "Old Dominion Freight",
+                "vehicle_ref": "TRK-IL-77YH3",
+                "from_location": "ORD Airport Cargo", "from_code": "ORD",
+                "to_location": "Midwest Apparel DC, Naperville", "to_code": "ORD-DC",
+                "departure": "2026-01-06T10:00:00Z",
+                "arrival": "2026-01-08T16:00:00Z",
+                "status": "scheduled",
+            },
+        ],
+    },
+    {
+        "id": "SHP-2025-4209",
+        "reference": "PO-65512-D",
+        "consignor": "Singapore Polymers Pte Ltd",
+        "consignee": "Aussie Plastics Sydney",
+        "origin": "Singapore",
+        "destination": "Sydney, Australia",
+        "origin_country": "SG",
+        "destination_country": "AU",
+        "status": "delayed",
+        "eta": "2025-12-30",
+        "progress": 78,
+        "modes": ["ocean", "road"],
+        "weight_kg": 22100.0,
+        "container_count": 2,
+        "booking_date": "2025-11-02",
+        "legs": [
+            {
+                "leg_id": "L1", "sequence": 1, "mode": "ocean",
+                "carrier": "ONE - Ocean Network Express",
+                "vehicle_ref": "ONE TRADITION / V.022S",
+                "from_location": "Port of Singapore", "from_code": "SGSIN",
+                "to_location": "Port Botany, Sydney", "to_code": "AUSYD",
+                "departure": "2025-11-05T20:00:00Z",
+                "arrival": "2025-12-15T08:00:00Z",
+                "status": "completed",
+                "notes": "Vessel delayed 4 days at Singapore.",
+            },
+            {
+                "leg_id": "L2", "sequence": 2, "mode": "road",
+                "carrier": "Toll Group",
+                "vehicle_ref": "TRK-NSW-AP4419",
+                "from_location": "Port Botany", "from_code": "AUSYD",
+                "to_location": "Aussie Plastics, Sydney", "to_code": "SYD-DC",
+                "departure": "2025-12-18T09:00:00Z",
+                "arrival": "2025-12-30T14:00:00Z",
+                "status": "delayed",
+                "notes": "Customs hold — paperwork pending. ETA pushed.",
+            },
+        ],
+    },
+]
+
+
+# ---------- Routes ----------
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Logistics Tracker API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+@api_router.get("/shipments", response_model=List[Shipment])
+async def list_shipments(status: Optional[str] = None):
+    items = SHIPMENTS
+    if status and status != "all":
+        items = [s for s in items if s["status"] == status]
+    return items
 
-# Include the router in the main app
+
+@api_router.get("/shipments/{shipment_id}", response_model=Shipment)
+async def get_shipment(shipment_id: str):
+    sid = shipment_id.strip().upper()
+    for s in SHIPMENTS:
+        if s["id"].upper() == sid or s["reference"].upper() == sid:
+            return s
+    raise HTTPException(status_code=404, detail=f"Shipment '{shipment_id}' not found")
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -77,12 +297,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
