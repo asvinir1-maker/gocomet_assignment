@@ -6,14 +6,14 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/", testid: "nav-dashboard" },
-  { label: "All Shipments", icon: Globe2, href: "/", testid: "nav-all", badge: "4" },
-  { label: "In Transit", icon: Truck, href: "/?status=active", testid: "nav-transit", badge: "2" },
-  { label: "Completed", icon: PackageCheck, href: "/?status=completed", testid: "nav-completed", badge: "1" },
-  { label: "Delayed", icon: AlertCircle, href: "/?status=delayed", testid: "nav-delayed", badge: "1" },
-  { label: "Yet to Start", icon: Hourglass, href: "/?status=scheduled", testid: "nav-scheduled" },
-  { label: "Starred", icon: Star, href: "/", testid: "nav-starred" },
-  { label: "Deleted", icon: Trash2, href: "/", testid: "nav-deleted" },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/#workspace", testid: "nav-dashboard" },
+  { label: "All Shipments", icon: Globe2, href: "/#workspace", testid: "nav-all", badge: "4" },
+  { label: "In Transit", icon: Truck, href: "/?status=active#workspace", testid: "nav-transit", badge: "2" },
+  { label: "Completed", icon: PackageCheck, href: "/?status=completed#workspace", testid: "nav-completed", badge: "1" },
+  { label: "Delayed", icon: AlertCircle, href: "/?status=delayed#workspace", testid: "nav-delayed", badge: "1" },
+  { label: "Yet to Start", icon: Hourglass, href: "/?status=scheduled#workspace", testid: "nav-scheduled" },
+  { label: "Starred", icon: Star, href: "/#workspace", testid: "nav-starred" },
+  { label: "Deleted", icon: Trash2, href: "/#workspace", testid: "nav-deleted" },
 ];
 
 export default function Sidebar() {

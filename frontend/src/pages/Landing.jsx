@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Filter, ArrowDownAZ } from "lucide-react";
 import HeroSearch from "../components/HeroSearch";
@@ -19,6 +19,23 @@ export default function Landing() {
   const audienceParam = params.get("view");
   const [audience, setAudience] = useState(audienceParam === "customer" ? "customer" : "shipper");
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Keep local audience state in sync with URL ?view= param (so sidebar Dashboard
+  // click from customer view falls back to shipper).
+  useEffect(() => {
+    const next = audienceParam === "customer" ? "customer" : "shipper";
+    setAudience((prev) => (prev === next ? prev : next));
+  }, [audienceParam]);
+
+  // Smooth-scroll to #workspace when sidebar links use that hash.
+  useEffect(() => {
+    if (location.hash === "#workspace") {
+      setTimeout(() => {
+        document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+  }, [location.hash, location.search]);
 
   const [shipments, setShipments] = useState([]);
   const [tracked, setTracked] = useState(null);
@@ -123,7 +140,7 @@ export default function Landing() {
 
       {/* Shipper-only list */}
       {audience === "shipper" && (
-        <section className="px-6 md:px-12 py-12 bg-white" data-testid="shipment-list-section">
+        <section id="workspace" className="px-6 md:px-12 py-12 bg-white scroll-mt-6" data-testid="shipment-list-section">
           <div className="max-w-7xl mx-auto">
             <div className="flex flex-wrap items-end justify-between gap-4 mb-8 border-b border-neutral-200 pb-6">
               <div>
