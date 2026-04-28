@@ -17,7 +17,7 @@ const COPY = {
     pill: "Track Your Order",
     h1a: "Where is my",
     h1b: "package",
-    sub: "Enter your order number and we'll show you exactly where your TechNova device is — from our factory to your doorstep.",
+    sub: "Enter your order number and we'll show you exactly where your package is — from the factory to your doorstep.",
     placeholder: "ENTER ORDER NUMBER",
     Icon: User,
   },
