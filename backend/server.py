@@ -1,12 +1,17 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import io
+import csv
 import logging
+import uuid
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
+from datetime import datetime, timezone
 
 
 ROOT_DIR = Path(__file__).parent
@@ -602,6 +607,317 @@ async def reverse_search(q: str):
                 break  # one match per shipment
 
     return {"query": q, "count": len(matches), "matches": matches}
+
+
+# ============================================================
+# ERP Integrations + Order Docs (PO/SO)
+# ============================================================
+class ERPIntegration(BaseModel):
+    id: str
+    provider: str          # SAP S/4HANA, Oracle NetSuite, ...
+    name: str              # user-given name
+    endpoint: Optional[str] = None
+    environment: Optional[str] = None  # production / sandbox
+    status: Literal["connected", "disconnected", "error"] = "connected"
+    last_sync: Optional[str] = None
+    record_count: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ERPCreate(BaseModel):
+    provider: str
+    name: str
+    endpoint: Optional[str] = None
+    environment: Optional[str] = "production"
+    api_key: Optional[str] = None  # not stored in returned object; mock
+
+
+class OrderDoc(BaseModel):
+    id: str
+    doc_type: Literal["PO", "SO"]
+    doc_number: str
+    party: str             # supplier (PO) or customer (SO)
+    shipment_id: str       # link to existing shipment or order
+    value_usd: float = 0.0
+    order_date: str        # ISO date
+    description: Optional[str] = None
+    source: Literal["erp", "upload", "seed"] = "seed"
+    integration_id: Optional[str] = None
+    valid: bool = True
+    error: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+INTEGRATIONS: List[dict] = [
+    {
+        "id": "INT-001",
+        "provider": "SAP S/4HANA",
+        "name": "Production SAP",
+        "endpoint": "https://sap.technova.example.com/odata/v2",
+        "environment": "production",
+        "status": "connected",
+        "last_sync": "2026-01-12T08:30:00Z",
+        "record_count": 4,
+        "created_at": "2025-10-01T10:00:00Z",
+    },
+    {
+        "id": "INT-002",
+        "provider": "Oracle NetSuite",
+        "name": "NetSuite Sandbox",
+        "endpoint": "https://1234567-sb1.suitetalk.api.netsuite.com",
+        "environment": "sandbox",
+        "status": "disconnected",
+        "last_sync": None,
+        "record_count": 0,
+        "created_at": "2025-11-10T14:20:00Z",
+    },
+]
+
+SUPPORTED_PROVIDERS = [
+    "SAP S/4HANA", "Oracle NetSuite", "MS Dynamics 365",
+    "Odoo", "Zoho Inventory", "Custom REST API",
+]
+
+ORDER_DOCS: List[dict] = [
+    {"id": "DOC-1", "doc_type": "PO", "doc_number": "PO-FAB-2024-091",
+     "party": "Foxconn Electronics", "shipment_id": "SHP-2025-5500",
+     "value_usd": 342500.0, "order_date": "2025-10-22",
+     "description": "Laptop chassis & display assemblies (1,250 units)",
+     "source": "erp", "integration_id": "INT-001", "valid": True, "error": None,
+     "created_at": "2025-10-22T08:00:00Z"},
+    {"id": "DOC-2", "doc_type": "PO", "doc_number": "PO-CHIP-2024-156",
+     "party": "Intel Semiconductor", "shipment_id": "SHP-2025-5500",
+     "value_usd": 128000.0, "order_date": "2025-10-25",
+     "description": "Core i7 / i9 CPUs (1,250 units)",
+     "source": "erp", "integration_id": "INT-001", "valid": True, "error": None,
+     "created_at": "2025-10-25T08:00:00Z"},
+    {"id": "DOC-3", "doc_type": "SO", "doc_number": "SO-CUST-7821",
+     "party": "Rahul Sharma", "shipment_id": "ORD-IN-7821",
+     "value_usd": 1899.0, "order_date": "2025-11-08",
+     "description": "TechNova UltraBook 14 Pro · 1 unit",
+     "source": "erp", "integration_id": "INT-001", "valid": True, "error": None,
+     "created_at": "2025-11-08T08:00:00Z"},
+    {"id": "DOC-4", "doc_type": "SO", "doc_number": "SO-CUST-7822",
+     "party": "Priya Mehta", "shipment_id": "ORD-IN-7822",
+     "value_usd": 1499.0, "order_date": "2025-11-08",
+     "description": "TechNova UltraBook 13 Air · 1 unit",
+     "source": "erp", "integration_id": "INT-001", "valid": True, "error": None,
+     "created_at": "2025-11-08T08:00:00Z"},
+    {"id": "DOC-5", "doc_type": "PO", "doc_number": "PO-AUTO-DE-401",
+     "party": "ZF Friedrichshafen AG", "shipment_id": "SHP-2025-2081",
+     "value_usd": 89200.0, "order_date": "2025-11-22",
+     "description": "8HP transmissions (40 units)",
+     "source": "seed", "integration_id": None, "valid": True, "error": None,
+     "created_at": "2025-11-22T08:00:00Z"},
+    {"id": "DOC-6", "doc_type": "SO", "doc_number": "SO-NJ-DC-7711",
+     "party": "Northeast Auto Parts NJ", "shipment_id": "SHP-2025-2081",
+     "value_usd": 112400.0, "order_date": "2025-11-25",
+     "description": "Transmission resale to Newark DC",
+     "source": "seed", "integration_id": None, "valid": True, "error": None,
+     "created_at": "2025-11-25T08:00:00Z"},
+    {"id": "DOC-7", "doc_type": "PO", "doc_number": "PO-TEX-2024-22",
+     "party": "Gujarat Cotton Mills", "shipment_id": "SHP-2025-3155",
+     "value_usd": 45800.0, "order_date": "2025-11-15",
+     "description": "Premium cotton bales (12,000 kg)",
+     "source": "seed", "integration_id": None, "valid": True, "error": None,
+     "created_at": "2025-11-15T08:00:00Z"},
+    {"id": "DOC-8", "doc_type": "SO", "doc_number": "SO-MID-IL-19",
+     "party": "Midwest Apparel Group", "shipment_id": "SHP-2025-3155",
+     "value_usd": 234500.0, "order_date": "2025-11-18",
+     "description": "Finished apparel SKUs (24 styles)",
+     "source": "seed", "integration_id": None, "valid": True, "error": None,
+     "created_at": "2025-11-18T08:00:00Z"},
+]
+
+
+def _valid_shipment_ids():
+    return {s["id"] for s in SHIPMENTS}
+
+
+def _new_doc_id() -> str:
+    return f"DOC-{uuid.uuid4().hex[:8].upper()}"
+
+
+def _new_int_id() -> str:
+    return f"INT-{uuid.uuid4().hex[:6].upper()}"
+
+
+# ----- Integrations endpoints -----
+@api_router.get("/integrations/providers")
+async def list_providers():
+    return {"providers": SUPPORTED_PROVIDERS}
+
+
+@api_router.get("/integrations", response_model=List[ERPIntegration])
+async def list_integrations():
+    return INTEGRATIONS
+
+
+@api_router.post("/integrations", response_model=ERPIntegration)
+async def create_integration(body: ERPCreate):
+    if body.provider not in SUPPORTED_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Unsupported provider: {body.provider}")
+    rec = {
+        "id": _new_int_id(),
+        "provider": body.provider,
+        "name": body.name,
+        "endpoint": body.endpoint,
+        "environment": body.environment or "production",
+        "status": "connected",
+        "last_sync": datetime.now(timezone.utc).isoformat(),
+        "record_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    INTEGRATIONS.append(rec)
+    return rec
+
+
+@api_router.post("/integrations/{integration_id}/sync")
+async def sync_integration(integration_id: str):
+    for it in INTEGRATIONS:
+        if it["id"].upper() == integration_id.upper():
+            it["status"] = "connected"
+            it["last_sync"] = datetime.now(timezone.utc).isoformat()
+            # In real life this would pull new docs from the ERP. We just bump the count.
+            new_count = sum(1 for d in ORDER_DOCS if d.get("integration_id") == it["id"])
+            it["record_count"] = new_count
+            return {"ok": True, "integration_id": it["id"], "synced_records": new_count, "last_sync": it["last_sync"]}
+    raise HTTPException(status_code=404, detail="Integration not found")
+
+
+@api_router.delete("/integrations/{integration_id}")
+async def delete_integration(integration_id: str):
+    global INTEGRATIONS
+    before = len(INTEGRATIONS)
+    INTEGRATIONS = [x for x in INTEGRATIONS if x["id"].upper() != integration_id.upper()]
+    if len(INTEGRATIONS) == before:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    return {"ok": True, "deleted": integration_id}
+
+
+# ----- Order docs endpoints -----
+@api_router.get("/orders-docs", response_model=List[OrderDoc])
+async def list_order_docs(doc_type: Optional[str] = None, shipment_id: Optional[str] = None):
+    items = ORDER_DOCS
+    if doc_type and doc_type.upper() in ("PO", "SO"):
+        items = [d for d in items if d["doc_type"] == doc_type.upper()]
+    if shipment_id:
+        items = [d for d in items if d["shipment_id"].upper() == shipment_id.upper()]
+    return items
+
+
+@api_router.get("/orders-docs/by-shipment/{shipment_id}", response_model=List[OrderDoc])
+async def docs_by_shipment(shipment_id: str):
+    sid = shipment_id.upper()
+    return [d for d in ORDER_DOCS if d["shipment_id"].upper() == sid]
+
+
+@api_router.get("/orders-docs/template", response_class=PlainTextResponse)
+async def docs_template():
+    """Return a CSV template users can fill in and re-upload."""
+    rows = [
+        ["doc_type", "doc_number", "party", "shipment_id", "value_usd", "order_date", "description"],
+        ["PO", "PO-EXAMPLE-001", "Acme Supplies Co.", "SHP-2025-1042", "12500.00", "2025-12-01", "Example purchase order"],
+        ["SO", "SO-EXAMPLE-001", "Acme Customer LLC", "SHP-2025-1042", "18900.00", "2025-12-02", "Example sales order"],
+    ]
+    out = io.StringIO()
+    csv.writer(out).writerows(rows)
+    return out.getvalue()
+
+
+def _parse_upload(filename: str, raw: bytes) -> List[dict]:
+    """Return list of row dicts from a CSV or XLSX upload."""
+    name = (filename or "").lower()
+    if name.endswith(".xlsx"):
+        try:
+            from openpyxl import load_workbook
+        except ImportError:
+            raise HTTPException(status_code=500, detail="openpyxl not installed")
+        wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return []
+        headers = [str(h or "").strip() for h in rows[0]]
+        return [dict(zip(headers, r)) for r in rows[1:] if any(c not in (None, "") for c in r)]
+    # CSV
+    text = raw.decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    return [dict(r) for r in reader]
+
+
+@api_router.post("/orders-docs/upload")
+async def upload_order_docs(file: UploadFile = File(...)):
+    raw = await file.read()
+    try:
+        rows = _parse_upload(file.filename or "", raw)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {e}")
+
+    valid_ids = _valid_shipment_ids()
+    parsed: List[dict] = []
+    valid_count = 0
+    error_count = 0
+    for r in rows:
+        try:
+            doc_type = (str(r.get("doc_type") or "")).upper().strip()
+            doc_number = str(r.get("doc_number") or "").strip()
+            party = str(r.get("party") or "").strip()
+            shipment_id = str(r.get("shipment_id") or "").strip().upper()
+            value_str = str(r.get("value_usd") or "0").strip()
+            value_usd = float(value_str) if value_str else 0.0
+            order_date = str(r.get("order_date") or "").strip() or datetime.now(timezone.utc).date().isoformat()
+            description = (str(r.get("description") or "").strip()) or None
+
+            errors = []
+            if doc_type not in ("PO", "SO"): errors.append("doc_type must be PO or SO")
+            if not doc_number: errors.append("doc_number is required")
+            if not party: errors.append("party is required")
+            if not shipment_id: errors.append("shipment_id is required")
+            elif shipment_id not in valid_ids: errors.append(f"unknown shipment_id '{shipment_id}'")
+
+            valid = len(errors) == 0
+            doc = {
+                "id": _new_doc_id(),
+                "doc_type": doc_type or "PO",
+                "doc_number": doc_number or "—",
+                "party": party or "—",
+                "shipment_id": shipment_id,
+                "value_usd": value_usd,
+                "order_date": order_date,
+                "description": description,
+                "source": "upload",
+                "integration_id": None,
+                "valid": valid,
+                "error": "; ".join(errors) if errors else None,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            parsed.append(doc)
+            if valid:
+                ORDER_DOCS.append(doc)
+                valid_count += 1
+            else:
+                error_count += 1
+        except Exception as e:
+            error_count += 1
+            parsed.append({
+                "id": _new_doc_id(),
+                "doc_type": "PO", "doc_number": "—", "party": "—",
+                "shipment_id": "—", "value_usd": 0.0, "order_date": "",
+                "description": None, "source": "upload",
+                "integration_id": None, "valid": False, "error": f"row error: {e}",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+    return {
+        "filename": file.filename,
+        "total_rows": len(rows),
+        "imported": valid_count,
+        "errors": error_count,
+        "preview": parsed,
+    }
 
 
 app.include_router(api_router)

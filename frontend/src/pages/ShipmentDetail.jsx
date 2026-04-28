@@ -5,12 +5,14 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import MultimodalTimeline from "../components/MultimodalTimeline";
 import StatusBadge from "../components/StatusBadge";
 import LinkedOrdersPanel from "../components/LinkedOrdersPanel";
+import LinkedDocsPanel from "../components/integrations/LinkedDocsPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function ShipmentDetail() {
   const { id } = useParams();
   const [shipment, setShipment] = useState(null);
+  const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -20,6 +22,9 @@ export default function ShipmentDetail() {
       .then((r) => setShipment(r.data))
       .catch((e) => setError(e.response?.data?.detail || "Not found"))
       .finally(() => setLoading(false));
+    axios.get(`${API}/orders-docs/by-shipment/${id}`)
+      .then((r) => setDocs(r.data || []))
+      .catch(() => setDocs([]));
   }, [id]);
 
   return (
@@ -56,6 +61,7 @@ export default function ShipmentDetail() {
             </div>
             <MultimodalTimeline shipment={shipment} />
             {shipment.linked_orders && <LinkedOrdersPanel orders={shipment.linked_orders} />}
+            <LinkedDocsPanel docs={docs} />
           </>
         )}
       </div>
