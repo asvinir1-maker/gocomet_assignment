@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import axios from "axios";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import CustomerTimeline from "../components/CustomerTimeline";
+import CustomerActions from "../components/CustomerActions";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -50,6 +51,7 @@ export default function CustomerOrderDetail() {
               <p className="text-neutral-600 mt-2">Here's where your <span className="text-neutral-950 font-medium">{order.product}</span> is right now.</p>
             </div>
             <CustomerTimeline shipment={order} />
+            <CustomerActions shipment={order} />
           </>
         )}
       </div>

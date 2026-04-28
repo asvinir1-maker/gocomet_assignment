@@ -134,15 +134,7 @@ export default function CustomerTimeline({ shipment }) {
         </ol>
       </div>
 
-      {/* Help footer */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 px-1">
-        <div className="text-xs text-neutral-500">
-          Questions about your order? Email <span className="font-mono text-neutral-700">support@technova.com</span>
-        </div>
-        <div className="text-[10px] tracking-[0.25em] uppercase font-bold text-neutral-400">
-          Powered by UniRoute
-        </div>
-      </div>
+      {/* Help footer — replaced by CustomerActions on the page */}
     </div>
   );
 }
