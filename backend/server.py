@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 ROOT_DIR = Path(__file__).parent
@@ -1066,6 +1066,20 @@ def _strip_ids(docs):
     return [_strip_id(d) for d in docs]
 
 
+def _shipment_exists(sid: str) -> bool:
+    sid_u = sid.upper()
+    return any(s["id"].upper() == sid_u for s in SHIPMENTS)
+
+
+def _leg_exists(sid: str, leg_id: str) -> bool:
+    sid_u = sid.upper()
+    leg_u = leg_id.upper()
+    for s in SHIPMENTS:
+        if s["id"].upper() == sid_u:
+            return any((l.get("leg_id") or "").upper() == leg_u for l in s.get("legs", []))
+    return False
+
+
 # ----- Default seed template -----
 SEED_TEMPLATE = {
     "id": "TPL-PHARMA-COLD",
@@ -1199,18 +1213,6 @@ async def delete_milestone_template(template_id: str):
 
 
 # ----- Custom Milestones (per shipment + leg) -----
-def _shipment_exists(sid: str) -> bool:
-    sid_u = sid.upper()
-    return any(s["id"].upper() == sid_u for s in SHIPMENTS)
-
-
-def _leg_exists(sid: str, leg_id: str) -> bool:
-    sid_u = sid.upper()
-    leg_u = leg_id.upper()
-    for s in SHIPMENTS:
-        if s["id"].upper() == sid_u:
-            return any((l.get("leg_id") or "").upper() == leg_u for l in s.get("legs", []))
-    return False
 
 
 @api_router.get("/shipments/{shipment_id}/custom-milestones", response_model=List[CustomMilestone])
@@ -1253,6 +1255,187 @@ async def delete_custom_milestone(milestone_id: str):
         raise HTTPException(status_code=404, detail="Custom milestone not found")
     await db["custom_milestones"].delete_one({"id": milestone_id.upper()})
     return {"ok": True, "deleted": milestone_id}
+
+
+# ============================================================
+# Stakeholder Remarks / Communications (MongoDB-backed)
+# ============================================================
+ALLOWED_VISIBILITY = {"internal", "public"}
+ALLOWED_ROLES = {
+    "Shipper", "Carrier", "Customs Agent", "Driver",
+    "Warehouse Ops", "Customer Support", "Customer", "Operations Manager",
+}
+
+
+class Remark(BaseModel):
+    id: str
+    shipment_id: str
+    leg_id: Optional[str] = None
+    milestone_code: Optional[str] = None
+    author_name: str
+    author_role: str
+    visibility: str = "internal"
+    message: str
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class RemarkCreate(BaseModel):
+    leg_id: Optional[str] = None
+    milestone_code: Optional[str] = None
+    author_name: str
+    author_role: str
+    visibility: str = "internal"
+    message: str
+
+
+class RemarkUpdate(BaseModel):
+    visibility: Optional[str] = None
+    message: Optional[str] = None
+
+
+# Seed remarks for demo against SHP-2025-1042
+SEED_REMARKS = [
+    {
+        "shipment_id": "SHP-2025-1042", "leg_id": "L1", "milestone_code": "PUP",
+        "author_name": "Mei Lin", "author_role": "Warehouse Ops", "visibility": "internal",
+        "message": "Pallets 1-12 loaded. Container 4521 sealed and dispatched at 09:14 local time.",
+    },
+    {
+        "shipment_id": "SHP-2025-1042", "leg_id": "L2", "milestone_code": "DEP",
+        "author_name": "Captain Reyes", "author_role": "Carrier", "visibility": "public",
+        "message": "Vessel departed Shanghai on schedule. Currently sailing toward Pacific corridor.",
+    },
+    {
+        "shipment_id": "SHP-2025-1042", "leg_id": "L2", "milestone_code": "TRN",
+        "author_name": "Capt. Reyes", "author_role": "Carrier", "visibility": "internal",
+        "message": "Slight diversion north to avoid Typhoon Surigae. ETA impact: ~6 hours. No cargo risk.",
+    },
+    {
+        "shipment_id": "SHP-2025-1042", "leg_id": "L2", "milestone_code": "TRN",
+        "author_name": "Anna Park", "author_role": "Operations Manager", "visibility": "public",
+        "message": "Your shipment is mid-ocean and on schedule. ETA unchanged. We'll keep you posted.",
+    },
+    {
+        "shipment_id": "SHP-2025-1042", "leg_id": "L2", "milestone_code": "CCL",
+        "author_name": "Brian Hayes", "author_role": "Customs Agent", "visibility": "internal",
+        "message": "FDA flagged for random inspection. Cert. of origin & commercial invoice already filed.",
+    },
+    {
+        "shipment_id": "SHP-2025-1042", "leg_id": "L3", "milestone_code": "PSC",
+        "author_name": "Sam K.", "author_role": "Driver", "visibility": "public",
+        "message": "Pickup scheduled for tomorrow 7:30am from Long Beach terminal. Truck #LBT-117.",
+    },
+    # Customer-facing order ORD-IN-7821 (Bengaluru last-mile)
+    {
+        "shipment_id": "ORD-IN-7821", "leg_id": "L1", "milestone_code": "DLV",
+        "author_name": "Anna Park", "author_role": "Operations Manager", "visibility": "public",
+        "message": "Your TechNova UltraBook 14 Pro has left our Austin warehouse — first leg complete!",
+    },
+    {
+        "shipment_id": "ORD-IN-7821", "leg_id": "L2", "milestone_code": "DEP",
+        "author_name": "Capt. Chen", "author_role": "Carrier", "visibility": "public",
+        "message": "Vessel underway from Houston. Estimated 18 days at sea — we'll keep you posted.",
+    },
+    {
+        "shipment_id": "ORD-IN-7821", "leg_id": "L2", "milestone_code": "TRN",
+        "author_name": "Anna Park", "author_role": "Operations Manager", "visibility": "internal",
+        "message": "Customer asked about insurance — confirmed coverage with broker, no further action.",
+    },
+    {
+        "shipment_id": "ORD-IN-7821", "leg_id": "L3", "milestone_code": "OFD",
+        "author_name": "BlueDart Bengaluru", "author_role": "Driver", "visibility": "public",
+        "message": "Out for delivery! Our driver will reach your address between 10am – 2pm tomorrow. SMS code: 4821",
+    },
+]
+
+
+@app.on_event("startup")
+async def _seed_remarks():
+    try:
+        existing = await db["remarks"].count_documents({})
+        if existing == 0:
+            now = datetime.now(timezone.utc)
+            docs = []
+            for i, r in enumerate(SEED_REMARKS):
+                docs.append({
+                    "id": f"RMK-{uuid.uuid4().hex[:8].upper()}",
+                    **r,
+                    "created_at": (now.replace(microsecond=0) - timedelta(hours=(len(SEED_REMARKS) - i) * 6)).isoformat(),
+                })
+            await db["remarks"].insert_many(docs)
+            logger.info("Seeded %d demo remarks", len(docs))
+    except Exception:
+        logger.exception("Failed to seed remarks")
+
+
+@api_router.get("/shipments/{shipment_id}/remarks", response_model=List[Remark])
+async def list_remarks(
+    shipment_id: str,
+    visibility: Optional[str] = None,
+    leg_id: Optional[str] = None,
+    milestone_code: Optional[str] = None,
+):
+    if not _shipment_exists(shipment_id):
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    q = {"shipment_id": shipment_id.upper()}
+    if visibility:
+        if visibility not in ALLOWED_VISIBILITY:
+            raise HTTPException(status_code=400, detail="Invalid visibility")
+        q["visibility"] = visibility
+    if leg_id:
+        q["leg_id"] = leg_id.upper()
+    if milestone_code:
+        q["milestone_code"] = milestone_code.upper()
+    docs = await db["remarks"].find(q).sort("created_at", -1).to_list(length=500)
+    return _strip_ids(docs)
+
+
+@api_router.post("/shipments/{shipment_id}/remarks", response_model=Remark)
+async def add_remark(shipment_id: str, body: RemarkCreate):
+    if not _shipment_exists(shipment_id):
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    if not body.message.strip():
+        raise HTTPException(status_code=400, detail="Message is required")
+    if not body.author_name.strip():
+        raise HTTPException(status_code=400, detail="Author name is required")
+    if body.visibility not in ALLOWED_VISIBILITY:
+        raise HTTPException(status_code=400, detail="visibility must be internal or public")
+    rec = {
+        "id": f"RMK-{uuid.uuid4().hex[:8].upper()}",
+        "shipment_id": shipment_id.upper(),
+        "leg_id": body.leg_id.upper() if body.leg_id else None,
+        "milestone_code": body.milestone_code.upper() if body.milestone_code else None,
+        "author_name": body.author_name.strip(),
+        "author_role": body.author_role.strip(),
+        "visibility": body.visibility,
+        "message": body.message.strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db["remarks"].insert_one(rec)
+    return _strip_id(rec)
+
+
+@api_router.patch("/remarks/{remark_id}", response_model=Remark)
+async def update_remark(remark_id: str, body: RemarkUpdate):
+    existing = await db["remarks"].find_one({"id": remark_id.upper()})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Remark not found")
+    updates = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
+    if "visibility" in updates and updates["visibility"] not in ALLOWED_VISIBILITY:
+        raise HTTPException(status_code=400, detail="Invalid visibility")
+    if updates:
+        await db["remarks"].update_one({"id": remark_id.upper()}, {"$set": updates})
+    doc = await db["remarks"].find_one({"id": remark_id.upper()})
+    return _strip_id(doc)
+
+
+@api_router.delete("/remarks/{remark_id}")
+async def delete_remark(remark_id: str):
+    doc = await db["remarks"].find_one({"id": remark_id.upper()})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Remark not found")
+    await db["remarks"].delete_one({"id": remark_id.upper()})
+    return {"ok": True, "deleted": remark_id}
 
 
 app.include_router(api_router)

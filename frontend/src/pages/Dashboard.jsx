@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { Layers, Activity, AlertTriangle, CheckCircle2, Clock, Package } from "lucide-react";
+import { Layers, Activity, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import KpiCard from "../components/dashboard/KpiCard";
 import FilterRail from "../components/dashboard/FilterRail";
 import FilterPresets from "../components/dashboard/FilterPresets";
@@ -83,9 +83,8 @@ export default function Dashboard() {
     const completed = filtered.filter((s) => s.status === "completed").length;
     const delayed = filtered.filter((s) => s.status === "delayed").length;
     const delayedOver7 = filtered.filter((s) => (s.delay_days || 0) >= 7).length;
-    const totalWeight = filtered.reduce((acc, s) => acc + (s.weight_kg || 0), 0);
     const avgProgress = total === 0 ? 0 : Math.round(filtered.reduce((acc, s) => acc + (s.progress || 0), 0) / total);
-    return { total, inTransit, completed, delayed, delayedOver7, totalWeight, avgProgress };
+    return { total, inTransit, completed, delayed, delayedOver7, avgProgress };
   }, [filtered]);
 
   // Preset handlers
@@ -109,13 +108,12 @@ export default function Dashboard() {
 
       <div className="max-w-[1600px] mx-auto px-6 md:px-12 py-8">
         {/* KPI Row */}
-        <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-px bg-neutral-200 border border-neutral-200 mb-8" data-testid="kpi-row">
+        <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-px bg-neutral-200 border border-neutral-200 mb-8" data-testid="kpi-row">
           <KpiCard testid="kpi-total" label="Total" value={kpis.total} sub="matching filters" Icon={Layers} />
           <KpiCard testid="kpi-in-transit" label="In Transit" value={kpis.inTransit} sub={`${kpis.total ? Math.round((kpis.inTransit/kpis.total)*100) : 0}% of set`} Icon={Activity} tone="warning" />
           <KpiCard testid="kpi-completed" label="Completed" value={kpis.completed} sub="delivered" Icon={CheckCircle2} tone="success" />
           <KpiCard testid="kpi-delayed" label="Delayed" value={kpis.delayed} sub="any delay" Icon={Clock} tone="warning" />
-          <KpiCard testid="kpi-delayed-7" label="Delayed > 7d" value={kpis.delayedOver7} sub="critical" Icon={AlertTriangle} tone="danger" />
-          <KpiCard testid="kpi-weight" label="Total Cargo" value={`${(kpis.totalWeight/1000).toFixed(1)}t`} sub={`avg progress ${kpis.avgProgress}%`} Icon={Package} />
+          <KpiCard testid="kpi-delayed-7" label="Delayed > 7d" value={kpis.delayedOver7} sub={`avg progress ${kpis.avgProgress}%`} Icon={AlertTriangle} tone="danger" />
         </section>
 
         {/* Body grid: Filter rail + Table */}

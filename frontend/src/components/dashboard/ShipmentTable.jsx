@@ -84,13 +84,12 @@ export default function ShipmentTable({ rows }) {
               <Header label="Progress" sortKey="progress" sort={sort} onSort={onSort} />
               <Header label="ETA" sortKey="eta" sort={sort} onSort={onSort} />
               <Header label="Delay" sortKey="delay_days" sort={sort} onSort={onSort} align="right" />
-              <Header label="Weight" sortKey="weight_kg" sort={sort} onSort={onSort} align="right" />
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
             {pageRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-16 text-center text-neutral-400" data-testid="table-empty">
+                <td colSpan={9} className="px-4 py-16 text-center text-neutral-400" data-testid="table-empty">
                   No shipments match the current filters.
                 </td>
               </tr>
@@ -155,9 +154,6 @@ export default function ShipmentTable({ rows }) {
                       ) : (
                         <span className="font-mono text-[12px] text-neutral-300">—</span>
                       )}
-                    </td>
-                    <td className="px-3 py-3 text-right font-mono text-[12px] text-neutral-700 whitespace-nowrap">
-                      {s.weight_kg.toLocaleString()} kg
                     </td>
                   </tr>
                 );

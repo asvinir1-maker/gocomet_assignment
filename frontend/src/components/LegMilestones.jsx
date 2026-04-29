@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronDown, Check, AlertTriangle, Plus, Trash2, Sparkles } from "lucide-react";
+import { ChevronDown, Check, AlertTriangle, Plus, Trash2, Sparkles, MessageSquare } from "lucide-react";
 import { getMilestoneSummary, getLegDurationDays, daysBetween } from "../lib/milestones";
 import { fmtDateTime } from "../lib/format";
 import { deleteCustomMilestone } from "../lib/templatesApi";
@@ -37,8 +37,10 @@ export default function LegMilestones({
   journeyStart,
   template = null,
   customMilestones = [],
+  remarks = [],
   defaultOpen = false,
   onCustomChanged = null,
+  onJumpToRemarks = null,
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const { completed, total, milestones } = getMilestoneSummary(leg, {
@@ -145,6 +147,36 @@ export default function LegMilestones({
                           CUSTOM
                         </span>
                       )}
+                      {(() => {
+                        const cnt = remarks.filter(
+                          (r) =>
+                            (r.leg_id || "").toUpperCase() === (leg.leg_id || "").toUpperCase() &&
+                            (r.milestone_code || "").toUpperCase() === (m.code || "").toUpperCase(),
+                        ).length;
+                        if (cnt === 0) return null;
+                        const pubCnt = remarks.filter(
+                          (r) =>
+                            (r.leg_id || "").toUpperCase() === (leg.leg_id || "").toUpperCase() &&
+                            (r.milestone_code || "").toUpperCase() === (m.code || "").toUpperCase() &&
+                            r.visibility === "public",
+                        ).length;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onJumpToRemarks && onJumpToRemarks();
+                            }}
+                            data-testid={`milestone-remark-badge-${leg.leg_id}-${m.code}`}
+                            className="ml-1.5 inline-flex items-center gap-1 font-mono text-[9px] text-blue-700 bg-blue-50 px-1.5 py-0.5 border border-blue-200 hover:bg-blue-100 align-middle"
+                            title={`${cnt} remark${cnt === 1 ? "" : "s"} (${pubCnt} public)`}
+                          >
+                            <MessageSquare className="w-2.5 h-2.5" />
+                            {cnt}
+                            {pubCnt > 0 && <span className="text-emerald-700">·{pubCnt}</span>}
+                          </button>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {dayFromJourney !== null && (

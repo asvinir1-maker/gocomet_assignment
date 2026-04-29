@@ -4,12 +4,15 @@ import axios from "axios";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import CustomerTimeline from "../components/CustomerTimeline";
 import CustomerActions from "../components/CustomerActions";
+import PublicRemarks from "../components/PublicRemarks";
+import { listRemarks } from "../lib/remarksApi";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function CustomerOrderDetail() {
   const { orderNo } = useParams();
   const [order, setOrder] = useState(null);
+  const [publicRemarks, setPublicRemarks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -19,6 +22,9 @@ export default function CustomerOrderDetail() {
       .then(r => setOrder(r.data))
       .catch(e => setError(e.response?.data?.detail || "Order not found"))
       .finally(() => setLoading(false));
+    listRemarks(orderNo, { visibility: "public" })
+      .then(setPublicRemarks)
+      .catch(() => setPublicRemarks([]));
   }, [orderNo]);
 
   return (
@@ -51,6 +57,7 @@ export default function CustomerOrderDetail() {
               <p className="text-neutral-600 mt-2">Here's where your <span className="text-neutral-950 font-medium">{order.product}</span> is right now.</p>
             </div>
             <CustomerTimeline shipment={order} />
+            <PublicRemarks remarks={publicRemarks} shipment={order} />
             <CustomerActions shipment={order} />
           </>
         )}
