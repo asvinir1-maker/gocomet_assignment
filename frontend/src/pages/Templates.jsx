@@ -8,6 +8,7 @@ import {
   listTemplates, createTemplate, updateTemplate, cloneTemplate, deleteTemplate,
 } from "../lib/templatesApi";
 import { STANDARD_TEMPLATE } from "../lib/milestones";
+import { PHASES, pctToPhase, phaseKeyToPct, phaseLabel } from "../lib/phases";
 import { toast } from "sonner";
 
 const MODES = [
@@ -224,7 +225,9 @@ function TemplateCard({ template, onEdit, onClone, onDelete }) {
                   {m.code}
                 </span>
                 <span className="flex-1 text-neutral-800 truncate">{m.label}</span>
-                <span className="font-mono text-[10px] text-neutral-400">{m.offset_pct}%</span>
+                <span className="text-[10px] text-neutral-500 italic whitespace-nowrap">
+                  {phaseLabel(m.offset_pct)}
+                </span>
               </li>
             ))}
           </ol>
@@ -431,18 +434,16 @@ function TemplateEditor({ template, onClose, onSaved }) {
                   />
                 </div>
                 <div className="col-span-4 flex items-center gap-2">
-                  <input
-                    data-testid={`m-offset-${activeMode}-${idx}`}
-                    type="range"
-                    min={-50}
-                    max={150}
-                    value={m.offset_pct}
-                    onChange={(e) => updateItem(activeMode, idx, { offset_pct: Number(e.target.value) })}
-                    className="flex-1 accent-neutral-950"
-                  />
-                  <span className="font-mono text-[10px] text-neutral-600 w-12 text-right">
-                    {m.offset_pct}%
-                  </span>
+                  <select
+                    data-testid={`m-phase-${activeMode}-${idx}`}
+                    value={pctToPhase(m.offset_pct).key}
+                    onChange={(e) => updateItem(activeMode, idx, { offset_pct: phaseKeyToPct(e.target.value) })}
+                    className="flex-1 text-xs px-2 py-1 border border-neutral-300 focus:border-neutral-950 outline-none bg-white"
+                  >
+                    {PHASES.map((p) => (
+                      <option key={p.key} value={p.key}>{p.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-span-1 flex justify-end">
                   <button
@@ -475,11 +476,8 @@ function TemplateEditor({ template, onClose, onSaved }) {
             )}
           </div>
 
-          <div className="mt-3 text-[11px] text-neutral-500 font-mono">
-            Position: <span className="text-neutral-700">-50%</span> = before leg starts ·{" "}
-            <span className="text-neutral-700">0%</span> = at leg departure ·{" "}
-            <span className="text-neutral-700">100%</span> = at leg arrival ·{" "}
-            <span className="text-neutral-700">150%</span> = after leg ends
+          <div className="mt-3 text-[11px] text-neutral-500">
+            Each milestone is anchored to a phase of the leg's journey — pre-shipment, departure, transit, arrival or post-arrival.
           </div>
         </div>
 
@@ -570,7 +568,7 @@ function MilestonePicker({ mode, existing, onAddStandard, onAddCustom, onClose }
                   {m.code}
                 </span>
                 <span className="flex-1 truncate text-neutral-800">{m.label}</span>
-                <span className="font-mono text-[10px] text-neutral-400">{m.offset_pct}%</span>
+                <span className="text-[10px] text-neutral-500 italic whitespace-nowrap">{phaseLabel(m.offset_pct)}</span>
               </label>
             );
           })}

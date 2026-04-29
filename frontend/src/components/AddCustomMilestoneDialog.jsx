@@ -1,20 +1,21 @@
 import React, { useState } from "react";
 import { Plus, Loader2 } from "lucide-react";
 import { addCustomMilestone } from "../lib/templatesApi";
+import { PHASES, phaseKeyToPct } from "../lib/phases";
 import { toast } from "sonner";
 
 export default function AddCustomMilestoneDialog({ shipmentId, leg, onAdded, trigger }) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
-  const [offset, setOffset] = useState(50);
+  const [phase, setPhase] = useState("mid");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   const reset = () => {
     setCode("");
     setLabel("");
-    setOffset(50);
+    setPhase("mid");
     setNotes("");
   };
 
@@ -29,7 +30,7 @@ export default function AddCustomMilestoneDialog({ shipmentId, leg, onAdded, tri
       const created = await addCustomMilestone(shipmentId, leg.leg_id, {
         code: code.trim().toUpperCase().slice(0, 6),
         label: label.trim(),
-        offset_pct: Number(offset),
+        offset_pct: phaseKeyToPct(phase),
         notes: notes.trim() || null,
       });
       toast.success(`Added "${created.label}"`);
@@ -96,24 +97,18 @@ export default function AddCustomMilestoneDialog({ shipmentId, leg, onAdded, tri
 
               <div>
                 <label className="text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-500 block mb-1">
-                  Position in Leg ({offset}%)
+                  When in this leg
                 </label>
-                <input
-                  data-testid="cm-offset"
-                  type="range"
-                  min={-50}
-                  max={150}
-                  value={offset}
-                  onChange={(e) => setOffset(e.target.value)}
-                  className="w-full accent-neutral-950"
-                />
-                <div className="flex justify-between font-mono text-[10px] text-neutral-400 mt-0.5">
-                  <span>Before leg</span>
-                  <span>At dep (0%)</span>
-                  <span>Mid (50%)</span>
-                  <span>At arr (100%)</span>
-                  <span>After</span>
-                </div>
+                <select
+                  data-testid="cm-phase"
+                  value={phase}
+                  onChange={(e) => setPhase(e.target.value)}
+                  className="w-full text-sm px-2 py-1.5 border border-neutral-300 focus:border-neutral-950 outline-none bg-white"
+                >
+                  {PHASES.map((p) => (
+                    <option key={p.key} value={p.key}>{p.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
