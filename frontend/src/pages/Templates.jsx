@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Layers, Plus, Copy, Trash2, Edit3, Check, X, Loader2,
-  Plane, Ship, Truck, ArrowLeft,
+  Plane, Ship, Truck, ArrowLeft, Sparkles,
 } from "lucide-react";
 import {
   listTemplates, createTemplate, updateTemplate, cloneTemplate, deleteTemplate,
@@ -208,16 +208,34 @@ function TemplateEditor({ template, onClose, onSaved }) {
   );
   const [activeMode, setActiveMode] = useState("air");
   const [saving, setSaving] = useState(false);
+  const [picker, setPicker] = useState(null); // active mode key when picker is open
 
   const updateModeList = (mode, newList) => {
     setMilestones((prev) => ({ ...prev, [mode]: newList }));
   };
 
-  const addItem = (mode) => {
+  const addStandardItems = (mode, items) => {
+    const existingCodes = new Set((milestones[mode] || []).map((m) => (m.code || "").toUpperCase()));
+    const additions = items
+      .filter((m) => !existingCodes.has((m.code || "").toUpperCase()))
+      .map((m) => ({ code: m.code, label: m.label, offset_pct: m.offset_pct }));
+    if (additions.length === 0) {
+      toast.info("All selected milestones already added");
+      return;
+    }
+    const merged = [...(milestones[mode] || []), ...additions].sort(
+      (a, b) => a.offset_pct - b.offset_pct,
+    );
+    updateModeList(mode, merged);
+    setPicker(null);
+  };
+
+  const addCustomItem = (mode) => {
     updateModeList(mode, [
       ...(milestones[mode] || []),
       { code: "NEW", label: "New milestone", offset_pct: 50 },
     ]);
+    setPicker(null);
   };
 
   const updateItem = (mode, idx, patch) => {
@@ -375,13 +393,24 @@ function TemplateEditor({ template, onClose, onSaved }) {
                 </div>
               </div>
             ))}
-            <button
-              data-testid={`add-milestone-${activeMode}`}
-              onClick={() => addItem(activeMode)}
-              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-mono uppercase tracking-wider text-neutral-500 hover:text-neutral-950 hover:bg-neutral-50 border border-dashed border-neutral-300 hover:border-neutral-500 transition-colors"
-            >
-              <Plus className="w-3 h-3" /> Add milestone for {activeMode}
-            </button>
+
+            {picker === activeMode ? (
+              <MilestonePicker
+                mode={activeMode}
+                existing={milestones[activeMode] || []}
+                onAddStandard={(items) => addStandardItems(activeMode, items)}
+                onAddCustom={() => addCustomItem(activeMode)}
+                onClose={() => setPicker(null)}
+              />
+            ) : (
+              <button
+                data-testid={`add-milestone-${activeMode}`}
+                onClick={() => setPicker(activeMode)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-mono uppercase tracking-wider text-neutral-500 hover:text-neutral-950 hover:bg-neutral-50 border border-dashed border-neutral-300 hover:border-neutral-500 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> Add milestone for {activeMode}
+              </button>
+            )}
           </div>
 
           <div className="mt-3 text-[11px] text-neutral-500 font-mono">
@@ -406,6 +435,102 @@ function TemplateEditor({ template, onClose, onSaved }) {
             Save Template
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+function MilestonePicker({ mode, existing, onAddStandard, onAddCustom, onClose }) {
+  const standardList = STANDARD_TEMPLATE.milestones[mode] || [];
+  const existingCodes = new Set((existing || []).map((m) => (m.code || "").toUpperCase()));
+  const [selected, setSelected] = useState(new Set());
+
+  const toggle = (code) => {
+    const next = new Set(selected);
+    if (next.has(code)) next.delete(code); else next.add(code);
+    setSelected(next);
+  };
+
+  const handleAddSelected = () => {
+    const items = standardList.filter((m) => selected.has(m.code));
+    if (items.length === 0) return;
+    onAddStandard(items);
+  };
+
+  const available = standardList.filter((m) => !existingCodes.has((m.code || "").toUpperCase()));
+
+  return (
+    <div
+      data-testid={`milestone-picker-${mode}`}
+      className="border border-neutral-300 bg-neutral-50 p-3"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-600 flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3" /> Add milestone for {mode}
+        </div>
+        <button
+          onClick={onClose}
+          className="text-neutral-400 hover:text-neutral-700"
+          aria-label="Close picker"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="text-[11px] text-neutral-500 mb-2">
+        Pick from the standard {mode} milestone library, or create a brand-new stage.
+      </div>
+
+      {available.length === 0 ? (
+        <div className="text-xs text-neutral-500 italic px-2 py-3 bg-white border border-dashed border-neutral-300 mb-2">
+          All standard {mode} milestones are already added. You can still create a custom one below.
+        </div>
+      ) : (
+        <div className="max-h-60 overflow-y-auto border border-neutral-200 bg-white divide-y divide-neutral-100 mb-2">
+          {available.map((m) => {
+            const checked = selected.has(m.code);
+            return (
+              <label
+                key={m.code}
+                data-testid={`picker-item-${mode}-${m.code}`}
+                className={`flex items-center gap-2 px-2.5 py-1.5 cursor-pointer text-sm hover:bg-neutral-50 ${
+                  checked ? "bg-amber-50" : ""
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(m.code)}
+                  className="w-3.5 h-3.5 accent-neutral-950"
+                />
+                <span className="font-mono text-[10px] px-1.5 py-0.5 bg-neutral-100 text-neutral-700 tracking-wider">
+                  {m.code}
+                </span>
+                <span className="flex-1 truncate text-neutral-800">{m.label}</span>
+                <span className="font-mono text-[10px] text-neutral-400">{m.offset_pct}%</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <button
+          data-testid={`picker-add-selected-${mode}`}
+          onClick={handleAddSelected}
+          disabled={selected.size === 0}
+          className="px-3 py-1.5 text-xs font-medium bg-neutral-950 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+        >
+          <Plus className="w-3 h-3" /> Add selected {selected.size > 0 && `(${selected.size})`}
+        </button>
+        <button
+          data-testid={`picker-add-custom-${mode}`}
+          onClick={onAddCustom}
+          className="px-3 py-1.5 text-xs font-medium border border-neutral-300 hover:border-neutral-700 flex items-center gap-1.5 ml-auto"
+        >
+          <Plus className="w-3 h-3" /> Create new milestone stage
+        </button>
       </div>
     </div>
   );
