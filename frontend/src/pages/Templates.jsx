@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Layers, Plus, Copy, Trash2, Edit3, Check, X, Loader2,
-  Plane, Ship, Truck, ArrowLeft, Sparkles,
+  Plane, Ship, Truck, ArrowLeft, Sparkles, ChevronDown,
 } from "lucide-react";
 import {
   listTemplates, createTemplate, updateTemplate, cloneTemplate, deleteTemplate,
@@ -139,6 +139,15 @@ export default function Templates() {
 
 function TemplateCard({ template, onEdit, onClone, onDelete }) {
   const counts = MODES.map(({ key }) => (template.milestones?.[key] || []).length);
+  const [openMode, setOpenMode] = useState(null);
+
+  const toggleMode = (key) => {
+    setOpenMode((prev) => (prev === key ? null : key));
+  };
+
+  const openItems = openMode ? [...(template.milestones?.[openMode] || [])].sort((a, b) => a.offset_pct - b.offset_pct) : [];
+  const openLabel = MODES.find((m) => m.key === openMode)?.label;
+
   return (
     <div
       data-testid={`template-card-${template.id}`}
@@ -159,15 +168,68 @@ function TemplateCard({ template, onEdit, onClone, onDelete }) {
       </div>
 
       <div className="grid grid-cols-3 gap-2 mt-4">
-        {MODES.map(({ key, label, icon: Icon }, i) => (
-          <div key={key} className="border border-neutral-200 px-2 py-2 bg-neutral-50">
-            <div className="flex items-center gap-1.5 text-[10px] tracking-[0.15em] uppercase font-bold text-neutral-500">
-              <Icon className="w-3 h-3" /> {label}
-            </div>
-            <div className="font-mono text-base text-neutral-950 mt-0.5">{counts[i]}</div>
-          </div>
-        ))}
+        {MODES.map(({ key, label, icon: Icon }, i) => {
+          const isOpen = openMode === key;
+          const isEmpty = counts[i] === 0;
+          return (
+            <button
+              key={key}
+              type="button"
+              data-testid={`tpl-mode-${template.id}-${key}`}
+              onClick={() => !isEmpty && toggleMode(key)}
+              disabled={isEmpty}
+              className={`text-left border px-2 py-2 transition-colors ${
+                isOpen
+                  ? "border-neutral-950 bg-neutral-100"
+                  : isEmpty
+                    ? "border-neutral-200 bg-neutral-50 opacity-60 cursor-not-allowed"
+                    : "border-neutral-200 bg-neutral-50 hover:border-neutral-700 hover:bg-white cursor-pointer"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1.5 text-[10px] tracking-[0.15em] uppercase font-bold text-neutral-500">
+                  <Icon className="w-3 h-3" /> {label}
+                </div>
+                {!isEmpty && (
+                  <ChevronDown className={`w-3 h-3 text-neutral-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                )}
+              </div>
+              <div className="font-mono text-base text-neutral-950 mt-0.5">{counts[i]}</div>
+            </button>
+          );
+        })}
       </div>
+
+      {openMode && (
+        <div
+          data-testid={`tpl-mode-list-${template.id}-${openMode}`}
+          className="mt-3 border border-neutral-200 bg-neutral-50"
+        >
+          <div className="px-3 py-2 border-b border-neutral-200 flex items-center justify-between">
+            <div className="text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-600">
+              {openLabel} Milestones
+            </div>
+            <span className="font-mono text-[10px] text-neutral-400">{openItems.length} stages</span>
+          </div>
+          <ol className="divide-y divide-neutral-200 max-h-72 overflow-y-auto">
+            {openItems.map((m, idx) => (
+              <li
+                key={`${m.code}-${idx}`}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-white"
+              >
+                <span className="font-mono text-[10px] text-neutral-400 w-5 text-right">
+                  {idx + 1}.
+                </span>
+                <span className="font-mono text-[10px] px-1.5 py-0.5 bg-neutral-200 text-neutral-700 tracking-wider">
+                  {m.code}
+                </span>
+                <span className="flex-1 text-neutral-800 truncate">{m.label}</span>
+                <span className="font-mono text-[10px] text-neutral-400">{m.offset_pct}%</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       <div className="mt-4 pt-3 border-t border-neutral-200 flex items-center gap-2">
         {!template.is_builtin && (
